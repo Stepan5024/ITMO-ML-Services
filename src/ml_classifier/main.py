@@ -22,6 +22,7 @@ from ml_classifier import __version__
 from ml_classifier.middleware import add_request_logging_middleware
 from ml_classifier.models.schemas import ErrorResponse
 from ml_classifier.utils.logging import LogLevel, setup_logging
+from ml_classifier.controller.auth_controller import router as auth_router
 
 # Initialize logging
 setup_logging()
@@ -233,6 +234,7 @@ def create_app() -> FastAPI:
             )
 
     app.include_router(api_v1_router)
+    app.include_router(auth_router)
     return app
 
 
