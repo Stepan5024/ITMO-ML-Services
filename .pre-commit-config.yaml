@@ -7,12 +7,6 @@ repos:
     -   id: check-yaml
     -   id: check-added-large-files
 
--   repo: https://github.com/pycqa/isort
-    rev: 5.12.0
-    hooks:
-    -   id: isort
-        name: isort (python)
-
 -   repo: https://github.com/psf/black
     rev: 23.7.0
     hooks:
@@ -23,18 +17,3 @@ repos:
     rev: 6.1.0
     hooks:
     -   id: flake8
-        additional_dependencies: [flake8-docstrings]
-
--   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.1
-    hooks:
-    -   id: mypy
-        additional_dependencies:
-            - types-requests
-            - types-PyYAML
-            - types-redis
-            - types-python-dateutil
-            - types-psycopg2
-            - sqlalchemy-stubs
-            - types-passlib
-        exclude: ^(tests/|docs/)
