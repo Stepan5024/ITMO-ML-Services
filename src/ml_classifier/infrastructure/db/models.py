@@ -11,11 +11,14 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Integer,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, relationship
 
 from ml_classifier.domain.entities import TaskStatus, TransactionStatus, TransactionType
+from ml_classifier.domain.entities.ml_model import ModelType, ModelAlgorithm
+from ml_classifier.domain.entities.ml_model_version import ModelVersionStatus
 from ml_classifier.infrastructure.db.database import Base
 
 
@@ -126,3 +129,60 @@ class Transaction(Base):
     # Отношения
     user: Mapped["User"] = relationship("User", back_populates="transactions")
     task: Mapped[Optional["Task"]] = relationship("Task", back_populates="transactions")
+
+
+class MLModel(Base):
+    """SQLAlchemy model for ML models."""
+
+    __tablename__ = "ml_models"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False, unique=True, index=True)
+    description = Column(Text)
+    model_type = Column(Enum(ModelType, name="modeltype"), nullable=False, index=True)
+    algorithm = Column(Enum(ModelAlgorithm, name="modelalgorithm"), nullable=False)
+    input_schema = Column(JSONB, nullable=False, default={})
+    output_schema = Column(JSONB, nullable=False, default={})
+    is_active = Column(Boolean, nullable=False, default=True)
+    price_per_call = Column(Numeric(10, 2), nullable=False, default=0.0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationship to versions
+    versions = relationship(
+        "MLModelVersion", back_populates="model", cascade="all, delete-orphan"
+    )
+
+
+class MLModelVersion(Base):
+    """SQLAlchemy model for ML model versions."""
+
+    __tablename__ = "ml_model_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    model_id = Column(
+        UUID(as_uuid=True), ForeignKey("ml_models.id"), nullable=False, index=True
+    )
+    version = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    metrics = Column(JSONB, default={})
+    parameters = Column(JSONB, default={})
+    is_default = Column(Boolean, default=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    status = Column(
+        Enum(ModelVersionStatus), default=ModelVersionStatus.TRAINED, nullable=False
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    # Relationships
+    model = relationship("MLModel", back_populates="versions")
+    creator = relationship("User")
+
+    # Unique constraint for model_id + version
+    __table_args__ = ({"sqlite_autoincrement": True},)
