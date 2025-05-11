@@ -57,7 +57,6 @@ class Tokenizer(TextPreprocessingStep):
             pattern: Regex pattern for tokenization
         """
         self.pattern = pattern
-        # Download NLTK data if needed
         try:
             nltk.data.find("tokenizers/punkt")
         except LookupError:
@@ -83,7 +82,6 @@ class StopwordRemover(TextPreprocessingStep):
             language: Language for stopwords
             additional_stopwords: Additional stopwords to remove
         """
-        # Download stopwords if needed
         try:
             nltk.data.find("corpora/stopwords")
         except LookupError:
@@ -131,7 +129,6 @@ class Lemmatizer(TextPreprocessingStep):
         Args:
             pos: Part of speech tag ('n' for noun, 'v' for verb, etc.)
         """
-        # Download WordNet if needed
         try:
             nltk.data.find("corpora/wordnet")
         except LookupError:

@@ -18,10 +18,10 @@ class MLModelVersion(Entity):
     """Version of a machine learning model."""
 
     model_id: UUID
-    version: str  # Semantic versioning
+    version: str
     file_path: str
-    metrics: Dict[str, Any]  # Performance metrics
-    parameters: Dict[str, Any]  # Model parameters
+    metrics: Dict[str, Any]
+    parameters: Dict[str, Any]
     is_default: bool = False
     created_by: UUID
     file_size: int

@@ -40,8 +40,8 @@ class MLModel(Entity):
     description: Optional[str] = None
     model_type: ModelType
     algorithm: ModelAlgorithm
-    input_schema: Dict[str, Any]  # JSON Schema for input data
-    output_schema: Dict[str, Any]  # JSON Schema for output data
+    input_schema: Dict[str, Any]
+    output_schema: Dict[str, Any]
     is_active: bool = True
     price_per_call: Decimal = Field(default=Decimal("0.0"), ge=0)
 

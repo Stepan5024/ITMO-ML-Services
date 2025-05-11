@@ -17,8 +17,6 @@ def configure_routes() -> APIRouter:
     """
     router = APIRouter()
 
-    # Define routes here
-
     return router
 
 
@@ -50,7 +48,6 @@ class ServiceController:
         Returns:
             Dict[str, Any]: Processed results
         """
-        # Break long line into multiple lines
         processed_data = {
             "status": "processed",
             "input": data,

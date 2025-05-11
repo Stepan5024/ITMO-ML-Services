@@ -113,7 +113,6 @@ class PredictionService:
                 )
                 vectorizer = None
 
-                # Then load the actual model
             model = await self.model_loader.load_model(model_id, version_id)
 
             is_pipeline = isinstance(model, Pipeline)
@@ -122,20 +121,16 @@ class PredictionService:
             if "text" in validated_data:
                 raw_text = validated_data["text"]
                 if is_pipeline:
-                    # Pipeline сам векторизует
                     prediction_input = [raw_text]
                 else:
-                    # Для «сырых» моделей — загрузить и применить vectorizer
                     vectorizer = await self.model_loader.load_vectorizer(
                         model_id, version_id
                     )
                     prediction_input = vectorizer.transform([raw_text])
 
                 if vectorizer:
-                    # Use vectorizer if available
                     prediction_input = vectorizer.transform([raw_text])
                 else:
-                    # Fall back to raw text if no vectorizer
                     prediction_input = [raw_text]
             else:
                 prediction_input = validated_data
@@ -220,7 +215,6 @@ class PredictionService:
         reservation_id = None
 
         try:
-            # Get model and user
             model_entity = await self.model_repository.get_by_id(model_id)
             if not model_entity:
                 raise ModelNotFoundError(f"Model with ID {model_id} not found")
@@ -229,11 +223,9 @@ class PredictionService:
             if not user:
                 raise PredictionError(f"User with ID {user_id} not found")
 
-            # Calculate total cost for batch
             batch_size = len(data_list)
             total_cost = model_entity.price_per_call * batch_size
 
-            # Check balance and create reservation (except for sandbox mode)
             if not sandbox and total_cost > 0:
                 if not user.check_sufficient_balance(total_cost):
                     raise InsufficientBalanceError(
@@ -241,7 +233,6 @@ class PredictionService:
                         f"Available: {float(user.balance)}"
                     )
 
-                # Create task entry for batch
                 task = await self.task_repository.create(
                     {
                         "user_id": user_id,
@@ -251,7 +242,6 @@ class PredictionService:
                     }
                 )
 
-                # Reserve funds
                 transaction = (
                     await self.transaction_repository.create_charge_transaction(
                         user_id=user_id, amount=total_cost, task_id=task.id
@@ -259,40 +249,28 @@ class PredictionService:
                 )
                 reservation_id = transaction.id
 
-            # Load model
             model = await self.model_loader.load_model(model_id, version_id)
 
-            # Validate all inputs
             validated_data_list = [
                 await self.validate_input(model_id, data) for data in data_list
             ]
 
-            # Extract features for batch processing
-            # This will depend on model type and input format
             features = self._extract_batch_features(validated_data_list)
 
-            # Make batch prediction
             raw_predictions = model.predict(features)
 
-            # Format individual outputs
             results = []
             for i, raw_prediction in enumerate(raw_predictions):
-                # Format individual result
                 result = await self.format_output(
                     model_id, raw_prediction, validated_data_list[i]
                 )
                 results.append(result)
-
-            # Compute execution time
             execution_time = time.time() - start_time
 
-            # Update task status if applicable
             if not sandbox and total_cost > 0:
                 await self.task_repository.mark_as_completed(
                     task.id, {"results": results}
                 )
-
-            # Confirm payment if not sandbox
             if not sandbox and total_cost > 0 and reservation_id:
                 await self.transaction_repository.update_status(
                     reservation_id, "completed"
@@ -308,7 +286,6 @@ class PredictionService:
 
         except ModelNotFoundError as e:
             logger.error(f"Model not found: {str(e)}")
-            # Cancel reservation if applicable
             if reservation_id:
                 await self.transaction_repository.update_status(
                     reservation_id, "failed"
@@ -321,14 +298,12 @@ class PredictionService:
 
         except Exception as e:
             logger.exception(f"Error during batch prediction: {str(e)}")
-            # Cancel reservation if applicable
             if reservation_id:
                 await self.transaction_repository.update_status(
                     reservation_id, "failed"
                 )
             raise PredictionError(f"Batch prediction failed: {str(e)}")
 
-    # Format individual outputs
     async def validate_input(
         self, model_id: UUID, data: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -345,19 +320,14 @@ class PredictionService:
         Raises:
             ValidationError: If validation fails
         """
-        # Get model's input schema
         model_entity = await self.model_repository.get_by_id(model_id)
         if not model_entity:
             raise ModelNotFoundError(f"Model with ID {model_id} not found")
 
         input_schema = model_entity.input_schema
-
-        # Basic validation (required fields)
         for field, field_schema in input_schema.items():
             if field_schema.get("required", False) and field not in data:
                 raise ValidationError(f"Missing required field: {field}")
-
-        # Type validation for simple types
         for field, value in data.items():
             if field in input_schema:
                 field_type = input_schema[field].get("type")
@@ -386,41 +356,26 @@ class PredictionService:
         Returns:
             Formatted output
         """
-        # Get model's output schema
         model_entity = await self.model_repository.get_by_id(model_id)
         if not model_entity:
             raise ModelNotFoundError(f"Model with ID {model_id} not found")
 
         output_schema = model_entity.output_schema
-
-        # Default formatting for classification models (binary/multiclass)
         if model_entity.model_type == "classification":
-            # Assuming binary classification for sentiment
             result = {"prediction": "positive" if raw_prediction == 1 else "negative"}
-
-            # Add confidence if available in output schema
             if "confidence" in output_schema:
-                # This would come from a probability method in practice
-                result["confidence"] = 0.85  # Placeholder
+                result["confidence"] = 0.85
 
-            # Add categories if available in output schema
             if "categories" in output_schema:
-                # This would come from a more sophisticated analysis in practice
                 if "text" in input_data:
                     result["categories"] = self._extract_categories(input_data["text"])
-
-        # Default formatting for regression models
         elif model_entity.model_type == "regression":
             result = {"prediction": float(raw_prediction)}
-
-            # Add error bounds if available in output schema
             if "error_bounds" in output_schema:
                 result["error_bounds"] = {
                     "lower": float(raw_prediction) - 0.1,
                     "upper": float(raw_prediction) + 0.1,
                 }
-
-        # Generic output format for other model types
         else:
             if isinstance(raw_prediction, (list, tuple, set)):
                 result = {"prediction": list(raw_prediction)}
@@ -439,9 +394,7 @@ class PredictionService:
         Returns:
             Extracted features for batch processing
         """
-        # For text classification models, extract text
         if all("text" in data for data in data_list):
-            # Extract just the text strings, not the whole dictionaries
             features = [data["text"] for data in data_list]
             logger.info(f"Extracted {len(features)} text features for batch prediction")
             return features
@@ -459,7 +412,6 @@ class PredictionService:
         Returns:
             List of extracted categories
         """
-        # Simple keyword-based category extraction
         categories = []
         keywords = {
             "quality": ["качество", "хороший", "плохой", "отличн"],

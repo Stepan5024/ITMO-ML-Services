@@ -42,7 +42,7 @@ app = FastAPI()
 class FeedbackRequest(BaseModel):
     """Model for feedback analysis request data."""
 
-    text: str  # Текст комментария для анализа
+    text: str
 
 
 @app.post("/api/v1/predict/feedback", summary="Предсказание тональности комментария")

@@ -89,7 +89,6 @@ class ModelListResponse(BaseModel):
     total: int = Field(..., description="Total number of models")
 
 
-# Dependencies
 async def get_prediction_service(session=Depends(get_db)):
     """Get prediction service with dependencies."""
     model_repo = SQLAlchemyMLModelRepository(session)
@@ -118,7 +117,6 @@ async def get_model_repository(session=Depends(get_db)):
     return SQLAlchemyMLModelRepository(session)
 
 
-# Endpoints
 @router.post("/predict/{model_id}", response_model=PredictionResponse)
 async def predict(
     model_id: UUID = Path(..., description="ID of the model to use"),
@@ -177,7 +175,6 @@ async def batch_predict(
     This endpoint charges the user based on the model's price_per_call multiplied by the batch size.
     """
     try:
-        # Convert batch input to list of dictionaries
         data_list = [{"text": item.text} for item in input_data.items]
 
         result = await prediction_service.batch_predict(

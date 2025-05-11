@@ -61,7 +61,6 @@ class UserUseCase:
         if existing_user:
             return False, f"Email {email} is already registered.", None
 
-        # Create user with hashed password
         user = User.create(
             email=email,
             password=password,
@@ -118,8 +117,6 @@ class UserUseCase:
             return False, f"User with ID {user_id} not found.", None
 
         if full_name is not None:
-            # Create a new user instance with updated values
-            # We need to create a new instance because User is immutable (frozen=True)
             user = User(
                 id=user.id,
                 email=user.email,

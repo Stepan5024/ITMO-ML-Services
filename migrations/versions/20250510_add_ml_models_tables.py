@@ -62,12 +62,10 @@ def upgrade() -> None:
         "CREATE TYPE modelversionstatus AS ENUM ('TRAINED', 'TESTING', 'PRODUCTION')"
     )
 
-    # Создание типов (если не созданы выше)
     model_type.create(connection, checkfirst=True)
     model_algorithm.create(connection, checkfirst=True)
     model_version_status.create(connection, checkfirst=True)
 
-    # Затем создаем таблицы
     op.create_table(
         "ml_models",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
@@ -152,7 +150,6 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_ml_models_name"), table_name="ml_models")
     op.drop_table("ml_models")
 
-    # Удаляем типы
     connection = op.get_bind()
     model_version_status.drop(connection, checkfirst=True)
     model_algorithm.drop(connection, checkfirst=True)

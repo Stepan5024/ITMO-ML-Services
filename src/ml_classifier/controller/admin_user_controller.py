@@ -71,7 +71,7 @@ async def list_users(
 
     users, total = await admin_use_case.list_users(filters)
 
-    total_pages = (total + size - 1) // size  # Calculate total pages
+    total_pages = (total + size - 1) // size
 
     return AdminUserListResponse(
         items=[

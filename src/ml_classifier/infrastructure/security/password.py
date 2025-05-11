@@ -10,7 +10,6 @@ from ml_classifier.config.security import (
     BCRYPT_SALT_ROUNDS,
 )
 
-# Configure password hashing context
 pwd_context = CryptContext(
     schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=BCRYPT_SALT_ROUNDS
 )

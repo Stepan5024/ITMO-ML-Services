@@ -13,13 +13,11 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 
-# revision identifiers, used by Alembic.
 revision = "202310271200"
 down_revision = None
 branch_labels = None
 depends_on = None
 
-# Define all ENUM types
 task_status = ENUM(
     "pending",
     "processing",
@@ -45,7 +43,6 @@ def upgrade() -> None:
     transaction_type.create(connection, checkfirst=True)
     transaction_status.create(connection, checkfirst=True)
 
-    # Create users table
     op.create_table(
         "users",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
@@ -60,7 +57,6 @@ def upgrade() -> None:
     )
     op.create_index("ix_users_email", "users", ["email"])
 
-    # Create models table
     op.create_table(
         "models",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
@@ -75,7 +71,6 @@ def upgrade() -> None:
     )
     op.create_index("ix_models_name", "models", ["name"])
 
-    # Create tasks table using the pre-defined ENUM
     op.create_table(
         "tasks",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
@@ -97,7 +92,6 @@ def upgrade() -> None:
     op.create_index("ix_tasks_status", "tasks", ["status"])
     op.create_index("ix_tasks_created_at", "tasks", ["created_at"])
 
-    # Create transactions table using pre-defined ENUMs
     op.create_table(
         "transactions",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
@@ -123,7 +117,7 @@ def downgrade() -> None:
     op.drop_table("tasks")
     op.drop_table("models")
     op.drop_table("users")
-    # Drop enums in reverse order
+
     connection = op.get_bind()
     transaction_status.drop(connection, checkfirst=True)
     transaction_type.drop(connection, checkfirst=True)

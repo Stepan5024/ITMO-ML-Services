@@ -43,7 +43,6 @@ class ScikitLearnModel:
         Returns:
             Self for chaining
         """
-        # Preprocess text data if needed
         if self.preprocessor and isinstance(X, (list, str)):
             if isinstance(X, str):
                 X = [X]
@@ -51,7 +50,6 @@ class ScikitLearnModel:
         else:
             X_processed = X
 
-        # Fit the model
         self.model.fit(X_processed, y)
         return self
 
@@ -65,7 +63,6 @@ class ScikitLearnModel:
         Returns:
             Model predictions
         """
-        # Preprocess text data if needed
         if self.preprocessor and isinstance(X, (list, str)):
             if isinstance(X, str):
                 X = [X]
@@ -73,7 +70,6 @@ class ScikitLearnModel:
         else:
             X_processed = X
 
-        # Make predictions
         return self.model.predict(X_processed)
 
     def predict_proba(self, X: Any) -> np.ndarray:
@@ -92,7 +88,6 @@ class ScikitLearnModel:
         if not hasattr(self.model, "predict_proba"):
             raise AttributeError("This model doesn't support probability predictions")
 
-        # Preprocess text data if needed
         if self.preprocessor and isinstance(X, (list, str)):
             if isinstance(X, str):
                 X = [X]
@@ -100,7 +95,6 @@ class ScikitLearnModel:
         else:
             X_processed = X
 
-        # Make probability predictions
         return self.model.predict_proba(X_processed)
 
     def save(self, path: str, include_preprocessor: bool = True) -> str:
@@ -114,17 +108,13 @@ class ScikitLearnModel:
         Returns:
             Path where model was saved
         """
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        # Create save data
         save_data = {
             "model": self.model,
             "model_type": self.model_type,
             "preprocessor": self.preprocessor if include_preprocessor else None,
         }
-
-        # Save model
         if path.endswith(".pkl"):
             with open(path, "wb") as f:
                 pickle.dump(save_data, f)
@@ -155,7 +145,6 @@ class ScikitLearnModel:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Model file not found: {path}")
 
-        # Load model data
         if path.endswith(".pkl"):
             with open(path, "rb") as f:
                 save_data = pickle.load(f)
@@ -164,7 +153,6 @@ class ScikitLearnModel:
         else:
             raise ValueError(f"Unsupported file format: {path}")
 
-        # Create model instance
         model_instance = cls(
             model=save_data["model"],
             preprocessor=save_data.get("preprocessor"),

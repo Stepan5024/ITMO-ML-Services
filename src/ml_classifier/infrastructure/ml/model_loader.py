@@ -66,7 +66,6 @@ class ModelValidator:
         if model is None:
             return False, "Model is None"
 
-        # Check if model has predict method
         if not hasattr(model, "predict"):
             return False, "Model doesn't have a predict method"
 
@@ -100,7 +99,6 @@ class ModelLoader:
         self.validator = validator or ModelValidator()
         self.cache_size = cache_size
 
-        # Ensure the model storage path exists
         os.makedirs(model_storage_path, exist_ok=True)
 
     async def load_vectorizer(self, model_id: UUID, version_id: Optional[UUID] = None):
@@ -108,12 +106,10 @@ class ModelLoader:
         Load a vectorizer (e.g. TF-IDF) for the given model and version.
         """
         try:
-            # Get version entity
             version = await self.model_version_repository.get_latest_or_id(
                 model_id, version_id
             )
 
-            # Check if vectorizer path is stored in parameters
             if version.parameters and "vectorizer_path" in version.parameters:
                 vec_path = version.parameters["vectorizer_path"]
                 logger.info(
@@ -122,7 +118,6 @@ class ModelLoader:
                 if os.path.exists(vec_path):
                     return joblib.load(vec_path)
 
-            # Try in standard location for this version
             version_dir = os.path.dirname(version.file_path)
             standard_vec_path = os.path.join(version_dir, "vectorizer.pkl")
             logger.info(f"Trying standard vectorizer location: {standard_vec_path}")
@@ -130,7 +125,6 @@ class ModelLoader:
             if os.path.exists(standard_vec_path):
                 return joblib.load(standard_vec_path)
 
-            # Try common location as fallback
             base_dir = os.path.dirname(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
@@ -140,7 +134,6 @@ class ModelLoader:
                 logger.info(f"Using common vectorizer from: {common_vec_path}")
                 return joblib.load(common_vec_path)
 
-            # If still not found, log detailed error and raise exception
             logger.warning(
                 f"Vectorizer not found for model {model_id}. Tried paths: {standard_vec_path} and {common_vec_path}"
             )
@@ -173,13 +166,11 @@ class ModelLoader:
         """
         logger.info(f"Loading model {model_id} (version: {version_id or 'default'})")
 
-        # Get model entity from repository
         model_entity = await self.model_repository.get_by_id(model_id)
         if not model_entity:
             logger.error(f"Model not found: {model_id}")
             raise ModelNotFoundError(f"Model with ID {model_id} not found")
 
-        # Get version entity
         if version_id:
             version_entity = await self.model_version_repository.get_by_id(version_id)
             if not version_entity or version_entity.model_id != model_id:
@@ -197,7 +188,6 @@ class ModelLoader:
                     f"No default version found for model {model_id}"
                 )
 
-        # Load the model from file
         try:
             file_path = version_entity.file_path
             logger.info(f"Loading model from {file_path}")
@@ -210,7 +200,6 @@ class ModelLoader:
             else:
                 raise ModelLoadError(f"Unsupported model file format: {file_path}")
 
-            # Validate the model
             is_valid, error_msg = self.validator.validate(model)
             if not is_valid:
                 raise ModelLoadError(f"Invalid model: {error_msg}")
@@ -246,13 +235,11 @@ class ModelLoader:
             f"Loading model by name: {model_name} (version: {version or 'default'})"
         )
 
-        # Get model entity by name
         model_entity = await self.model_repository.get_by_name(model_name)
         if not model_entity:
             logger.error(f"Model not found: {model_name}")
             raise ModelNotFoundError(f"Model with name {model_name} not found")
 
-        # Get version entity
         if version:
             version_entity = (
                 await self.model_version_repository.get_by_model_id_and_version(
@@ -289,13 +276,11 @@ class ModelLoader:
             f"Getting metadata for model {model_id} (version: {version_id or 'default'})"
         )
 
-        # Get model entity
         model_entity = await self.model_repository.get_by_id(model_id)
         if not model_entity:
             logger.error(f"Model not found: {model_id}")
             raise ModelNotFoundError(f"Model with ID {model_id} not found")
 
-        # Get version entity
         if version_id:
             version_entity = await self.model_version_repository.get_by_id(version_id)
             if not version_entity or version_entity.model_id != model_id:
@@ -313,7 +298,6 @@ class ModelLoader:
                     f"No default version found for model {model_id}"
                 )
 
-        # Create and return metadata
         return ModelMetadata(
             model_id=model_entity.id,
             version_id=version_entity.id,

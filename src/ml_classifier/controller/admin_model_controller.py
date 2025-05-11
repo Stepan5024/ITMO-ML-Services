@@ -38,7 +38,6 @@ from ml_classifier.services.model_use_cases import ModelUseCase, ModelVersionUse
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin-models"])
 
-# Setup services
 model_storage = ModelStorage()
 
 
@@ -56,7 +55,6 @@ async def get_model_version_use_case(session=Depends(get_db)):
     return ModelVersionUseCase(model_repo, version_repo)
 
 
-# Model management endpoints
 @router.post(
     "/models", response_model=ModelResponse, status_code=status.HTTP_201_CREATED
 )
@@ -181,7 +179,6 @@ async def update_model(
 
     Admin-only endpoint for updating model details.
     """
-    # Filter out None values
     update_data = {k: v for k, v in model_data.dict().items() if v is not None}
 
     success, message, updated_model = await model_use_case.update_model(
@@ -293,7 +290,6 @@ async def deactivate_model(
     )
 
 
-# Model version management endpoints
 @router.post(
     "/models/{model_id}/versions",
     response_model=ModelVersionResponse,
@@ -318,7 +314,6 @@ async def create_version(
     import json
 
     try:
-        # Parse JSON strings
         metrics_dict = json.loads(metrics)
         parameters_dict = json.loads(parameters)
     except json.JSONDecodeError as e:
@@ -335,7 +330,6 @@ async def create_version(
     }
 
     try:
-        # Pass both files to the use case
         success, message, created_version = await version_use_case.create_version(
             model_id=model_id,
             version_data=version_data,
