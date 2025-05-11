@@ -10,9 +10,9 @@ from pydantic import BaseModel, EmailStr, Field
 class AdminUserFilter(BaseModel):
     """Filter model for admin user listing."""
 
-    search: Optional[str] = None  # Search by email or full name
-    is_active: Optional[bool] = None  # Filter by active status
-    is_admin: Optional[bool] = None  # Filter by admin status
+    search: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
     page: int = 1
     size: int = 10
 

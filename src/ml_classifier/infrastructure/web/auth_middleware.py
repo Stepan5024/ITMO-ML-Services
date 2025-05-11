@@ -10,7 +10,6 @@ from ml_classifier.domain.entities.user import User
 from ml_classifier.infrastructure.security.jwt import decode_token
 from ml_classifier.services.user_use_cases import UserUseCase, get_user_use_case
 
-# OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 

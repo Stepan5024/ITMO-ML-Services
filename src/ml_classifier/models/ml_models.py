@@ -93,7 +93,7 @@ class ModelListResponse(BaseModel):
 class ModelVersionCreate(BaseModel):
     """Model for creating a new ML model version."""
 
-    version: str  # Semantic versioning
+    version: str
     metrics: Dict[str, Any] = Field(default_factory=dict)
     parameters: Dict[str, Any] = Field(default_factory=dict)
     status: ModelVersionStatus = ModelVersionStatus.TRAINED
