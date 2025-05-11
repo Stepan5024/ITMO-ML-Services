@@ -177,15 +177,12 @@ class ModelUseCase:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        # Check if model exists
         model = await self.model_repository.get_by_id(model_id)
         if not model:
             return False, f"Model with ID {model_id} not found"
 
-        # Get all versions of the model
         versions = await self.version_repository.get_by_model_id(model_id)
 
-        # Delete model file for each version
         for version in versions:
             try:
                 if os.path.exists(version.file_path):
@@ -194,7 +191,6 @@ class ModelUseCase:
             except Exception as e:
                 return False, f"Error deleting version {version.id}: {str(e)}"
 
-        # Delete model
         try:
             success = await self.model_repository.delete(model_id)
             if success:
@@ -241,7 +237,6 @@ class ModelUseCase:
             models = await self.model_repository.search_models(
                 query=search, model_type=model_type, skip=skip, limit=limit
             )
-            # Count would be approximate in this case
             total = len(models) + skip
         else:
             models = await self.model_repository.list(skip=skip, limit=limit)
@@ -325,112 +320,136 @@ class ModelVersionUseCase:
         self.version_repository = version_repository
         self.model_storage_path = model_storage_path
 
-        # Create storage directory if it doesn't exist
         os.makedirs(self.model_storage_path, exist_ok=True)
 
     async def create_version(
         self,
         model_id: UUID,
         version_data: Dict[str, Any],
-        file: UploadFile,
-        user_id: UUID,
+        model_file: UploadFile,
+        vectorizer_file: Optional[UploadFile] = None,
+        user_id: UUID = None,
     ) -> Tuple[bool, str, Optional[MLModelVersion]]:
         """
-        Create a new model version.
-
-        Args:
-            model_id: Parent model ID
-            version_data: Version metadata
-            file: Uploaded model file
-            user_id: ID of the user creating the version
-
-        Returns:
-            Tuple[bool, str, Optional[MLModelVersion]]: (success, message, created_version)
+        Create a new model version with model file and optional vectorizer.
         """
-        # Check if model exists
         model = await self.model_repository.get_by_id(model_id)
         if not model:
             return False, f"Model with ID {model_id} not found", None
 
-        # Validate version format (semantic versioning)
         version = version_data.get("version")
         if not version or not self._is_valid_semver(version):
             return (
                 False,
-                "Invalid version format. Must follow semantic versioning (e.g. 1.0.0)",
+                "Invalid version format. Use semantic versioning (e.g. 1.0.0)",
                 None,
             )
 
-        # Check if version already exists for this model
         existing = await self.version_repository.get_by_model_id_and_version(
             model_id, version
         )
         if existing:
-            return False, f"Version {version} already exists for this model", None
+            return False, f"Version {version} already exists", None
 
-        # Create directory for model if it doesn't exist
+        # Create directory structure
         model_dir = os.path.join(self.model_storage_path, str(model_id))
         os.makedirs(model_dir, exist_ok=True)
 
+        # Generate a version ID
+        version_id = uuid.uuid4()
+        version_dir = os.path.join(model_dir, str(version_id))
+        os.makedirs(version_dir, exist_ok=True)
+
         # Save model file
-        file_path = os.path.join(model_dir, f"{version}.joblib")
+        model_file_path = os.path.join(version_dir, "model.joblib")
+        vectorizer_file_path = None
 
         try:
-            # Read uploaded file
-            contents = await file.read()
-            file_size = len(contents)
+            # Save model file
+            model_contents = await model_file.read()
+            model_file_size = len(model_contents)
 
-            # Write to disk
-            with open(file_path, "wb") as f:
-                f.write(contents)
+            with open(model_file_path, "wb") as f:
+                f.write(model_contents)
 
-            # Try to load model to validate it
+            # Test model loading
             try:
-                joblib.load(file_path)
-            except Exception:
-                os.remove(file_path)
-                return False, "Invalid model file: could not load with joblib", None
+                joblib.load(model_file_path)
+            except Exception as e:
+                # Clean up on failure
+                if os.path.exists(model_file_path):
+                    os.remove(model_file_path)
+                return False, f"Invalid model file: {str(e)}", None
 
-            # Parse status if provided
-            status = ModelVersionStatus.TRAINED
-            if "status" in version_data:
+            # Save vectorizer if provided
+            if vectorizer_file:
+                vectorizer_file_path = os.path.join(version_dir, "vectorizer.pkl")
+                vectorizer_contents = await vectorizer_file.read()
+
+                with open(vectorizer_file_path, "wb") as f:
+                    f.write(vectorizer_contents)
+
+                # Test vectorizer loading
                 try:
-                    status = ModelVersionStatus(version_data["status"])
-                except ValueError:
-                    return (
-                        False,
-                        f"Invalid status value. Must be one of: {', '.join([s.value for s in ModelVersionStatus])}",
-                        None,
-                    )
+                    joblib.load(vectorizer_file_path)
+                except Exception as e:
+                    # Clean up on failure
+                    if os.path.exists(vectorizer_file_path):
+                        os.remove(vectorizer_file_path)
+                    if os.path.exists(model_file_path):
+                        os.remove(model_file_path)
+                    return False, f"Invalid vectorizer file: {str(e)}", None
 
-            # Check if this is the first version (should be default)
-            versions = await self.version_repository.get_by_model_id(model_id)
-            is_default = len(versions) == 0
+            # Check if this should be the default version
+            is_default = await self._check_is_default(model_id)
 
             # Create version entity
             version_entity = MLModelVersion(
-                id=uuid.uuid4(),
+                id=version_id,
                 model_id=model_id,
                 version=version,
-                file_path=file_path,
+                file_path=model_file_path,
                 metrics=version_data.get("metrics", {}),
                 parameters=version_data.get("parameters", {}),
                 is_default=is_default,
                 created_by=user_id,
-                file_size=file_size,
-                status=status,
+                file_size=model_file_size,
+                status=ModelVersionStatus(version_data.get("status", "trained")),
+            )
+            parameters = version_data.get("parameters", {}).copy()
+            # Add vectorizer information to parameters if available
+            if vectorizer_file_path:
+                parameters["vectorizer_path"] = vectorizer_file_path
+
+            version_entity = MLModelVersion(
+                id=version_id,
+                model_id=model_id,
+                version=version,
+                file_path=model_file_path,
+                metrics=version_data.get("metrics", {}),
+                parameters=parameters,  # Use the updated parameters
+                is_default=is_default,
+                created_by=user_id,
+                file_size=model_file_size,
+                status=ModelVersionStatus(version_data.get("status", "trained")),
             )
 
-            # Save version to repository
+            # Save to database
             created = await self.version_repository.create(version_entity)
-
             return True, "Model version created successfully", created
 
         except Exception as e:
-            # Clean up file if it was created
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            # Clean up on any error
+            if os.path.exists(model_file_path):
+                os.remove(model_file_path)
+            if vectorizer_file_path and os.path.exists(vectorizer_file_path):
+                os.remove(vectorizer_file_path)
             return False, f"Error creating model version: {str(e)}", None
+
+    async def _check_is_default(self, model_id: UUID) -> bool:
+        """Check if this should be default version"""
+        versions = await self.version_repository.get_by_model_id(model_id)
+        return len(versions) == 0
 
     async def get_version(self, version_id: UUID) -> Optional[MLModelVersion]:
         """

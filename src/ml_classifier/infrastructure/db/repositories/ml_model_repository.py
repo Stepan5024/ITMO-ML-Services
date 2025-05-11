@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,10 +86,36 @@ class SQLAlchemyMLModelRepository(
         Returns:
             Optional[MLModelEntity]: Found model or None
         """
+        logger.info(f"Attempting to get model with ID: {entity_id}")
         result = await self.session.execute(
             select(MLModelDB).where(MLModelDB.id == entity_id)
         )
         db_model = result.scalars().first()
+        if db_model is None:
+            logger.warning(f"Model with ID {entity_id} not found in database")
+            try:
+                from ml_classifier.infrastructure.db.models import (
+                    Model as RegularModelDB,
+                )
+
+                regular_stmt = select(RegularModelDB).where(
+                    RegularModelDB.id == entity_id
+                )
+                regular_result = await self.session.execute(regular_stmt)
+                regular_db_model = regular_result.scalars().first()
+
+                if regular_db_model:
+                    logger.warning(
+                        f"Model with ID {entity_id} found in regular models table but not ML models table"
+                    )
+                else:
+                    logger.warning(
+                        f"Model with ID {entity_id} not found in regular models table either"
+                    )
+            except Exception as e:
+                logger.error(f"Error checking regular models table: {str(e)}")
+        else:
+            logger.info(f"Model with ID {entity_id} found")
         return None if db_model is None else self._db_to_entity(db_model)
 
     async def create(self, entity: MLModelEntity) -> MLModelEntity:

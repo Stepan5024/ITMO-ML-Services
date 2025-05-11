@@ -58,6 +58,46 @@ class SQLAlchemyMLModelVersionRepository(
             updated_at=db_model.updated_at,
         )
 
+    async def get_latest_or_id(
+        self, model_id: UUID, version_id: Optional[UUID] = None
+    ) -> MLModelVersionEntity:
+        """
+        Get a model version by ID or the latest version if ID is not provided.
+
+        Args:
+            model_id: The ID of the model
+            version_id: Optional specific version ID
+
+        Returns:
+            MLModelVersionEntity: Found model version
+
+        Raises:
+            ModelVersionNotFoundError: If no version is found
+        """
+        if version_id:
+            # Get specific version by ID
+            version = await self.get_by_id(version_id)
+            if not version or version.model_id != model_id:
+                raise ValueError(f"Version {version_id} not found for model {model_id}")
+            return version
+        else:
+            # Get default version or latest if no default exists
+            default_version = await self.get_default_version(model_id)
+            if default_version:
+                return default_version
+
+            # If no default version exists, get latest by creation date
+            result = await self.session.execute(
+                select(MLModelVersionDB)
+                .where(MLModelVersionDB.model_id == model_id)
+                .order_by(MLModelVersionDB.created_at.desc())
+                .limit(1)
+            )
+            version = result.scalars().first()
+            if not version:
+                raise ValueError(f"No versions found for model {model_id}")
+            return self._db_to_entity(version)
+
     def _entity_to_db_values(self, entity: MLModelVersionEntity) -> Dict:
         """
         Convert domain entity to database values dictionary.

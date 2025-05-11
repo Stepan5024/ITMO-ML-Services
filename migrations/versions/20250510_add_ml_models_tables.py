@@ -12,7 +12,6 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID, ENUM
 import uuid
 
-# revision identifiers, used by Alembic.
 revision: str = "20250510_add_ml_models"
 down_revision: Union[str, None] = "202310271201"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -24,7 +23,7 @@ model_type = ENUM(
     "clustering",
     "nlp",
     "computer_vision",
-    name="modeltype",  # Имя типа изменено
+    name="modeltype",
     create_type=False,
 )
 
@@ -39,12 +38,12 @@ model_algorithm = ENUM(
     "knn",
     "linear_regression",
     "k_means",
-    name="modelalgorithm",  # Имя типа изменено
+    name="modelalgorithm",
     create_type=False,
 )
 
 model_version_status = ENUM(
-    "trained", "testing", "production", name="model_version_status", create_type=False
+    "trained", "testing", "production", name="modelversionstatus", create_type=False
 )
 
 
@@ -60,7 +59,7 @@ def upgrade() -> None:
         "'DECISION_TREE', 'GRADIENT_BOOSTING', 'KNN', 'LINEAR_REGRESSION', 'K_MEANS')"
     )
     op.execute(
-        "CREATE TYPE model_version_status AS ENUM ('trained', 'testing', 'production')"
+        "CREATE TYPE modelversionstatus AS ENUM ('TRAINED', 'TESTING', 'PRODUCTION')"
     )
 
     # Создание типов (если не созданы выше)

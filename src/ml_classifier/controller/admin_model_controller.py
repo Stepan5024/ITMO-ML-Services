@@ -301,32 +301,32 @@ async def deactivate_model(
 )
 async def create_version(
     model_id: UUID,
-    file: UploadFile = File(...),
+    model_file: UploadFile = File(..., description="Model file (.joblib or .pkl)"),
+    vectorizer_file: Optional[UploadFile] = File(
+        None, description="TF-IDF vectorizer file (.joblib or .pkl)"
+    ),
     version: str = Form(...),
-    metrics: str = Form("{}"),  # JSON string
-    parameters: str = Form("{}"),  # JSON string
+    metrics: str = Form("{}"),
+    parameters: str = Form("{}"),
     status_value: ModelVersionStatus = Form(ModelVersionStatus.TRAINED),
     current_user: User = Depends(get_current_admin_user),
     version_use_case: ModelVersionUseCase = Depends(get_model_version_use_case),
 ):
     """
-    Upload a new version of an ML model.
-
-    Admin-only endpoint for uploading a new model version file.
+    Upload a new version of an ML model with optional vectorizer.
     """
     import json
 
-    # Parse JSON strings
     try:
+        # Parse JSON strings
         metrics_dict = json.loads(metrics)
         parameters_dict = json.loads(parameters)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Invalid JSON format for metrics or parameters",
+            detail=f"Invalid JSON format: {str(e)}",
         )
 
-    # Create version data
     version_data = {
         "version": version,
         "metrics": metrics_dict,
@@ -334,36 +334,39 @@ async def create_version(
         "status": status_value,
     }
 
-    # Read file content
-    file_content = await file.read()
+    try:
+        # Pass both files to the use case
+        success, message, created_version = await version_use_case.create_version(
+            model_id=model_id,
+            version_data=version_data,
+            model_file=model_file,
+            vectorizer_file=vectorizer_file,
+            user_id=current_user.id,
+        )
 
-    # Create version
-    success, message, created_version = await version_use_case.create_version(
-        model_id=model_id,
-        version_data=version_data,
-        file=file_content,  # Pass file content instead of UploadFile
-        user_id=current_user.id,
-    )
+        if not success:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
-    if not success:
-        if "not found" in message.lower():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
+        return ModelVersionResponse(
+            id=created_version.id,
+            model_id=created_version.model_id,
+            version=created_version.version,
+            file_path=created_version.file_path,
+            metrics=created_version.metrics,
+            parameters=created_version.parameters,
+            is_default=created_version.is_default,
+            created_by=created_version.created_by,
+            file_size=created_version.file_size,
+            status=created_version.status,
+            created_at=created_version.created_at,
+            updated_at=created_version.updated_at,
+        )
 
-    return ModelVersionResponse(
-        id=created_version.id,
-        model_id=created_version.model_id,
-        version=created_version.version,
-        file_path=created_version.file_path,
-        metrics=created_version.metrics,
-        parameters=created_version.parameters,
-        is_default=created_version.is_default,
-        created_by=created_version.created_by,
-        file_size=created_version.file_size,
-        status=created_version.status,
-        created_at=created_version.created_at,
-        updated_at=created_version.updated_at,
-    )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal server error: {str(e)}",
+        )
 
 
 @router.get("/models/{model_id}/versions", response_model=ModelVersionListResponse)

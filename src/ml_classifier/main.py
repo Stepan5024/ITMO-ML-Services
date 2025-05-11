@@ -26,6 +26,7 @@ from ml_classifier.controller.auth_controller import router as auth_router
 from ml_classifier.controller.profile_controller import router as profile_router
 from ml_classifier.controller.admin_user_controller import router as admin_user_router
 from ml_classifier.controller.admin_model_controller import router as admin_model_router
+from ml_classifier.controller.prediction_controller import router as prediction_router
 
 setup_logging()
 
@@ -241,6 +242,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_user_router)
 
     app.include_router(admin_model_router)
+    app.include_router(prediction_router)
+
     return app
 
 

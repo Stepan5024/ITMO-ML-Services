@@ -16,6 +16,7 @@ services:
       - ./src:/app/src
       - ./migrations:/app/migrations
       - ./alembic.ini:/app/alembic.ini
+      - ./models:/app/models
     depends_on:
       - postgres
       - redis
