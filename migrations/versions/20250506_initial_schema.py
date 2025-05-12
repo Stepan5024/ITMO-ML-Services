@@ -19,20 +19,30 @@ branch_labels = None
 depends_on = None
 
 task_status = ENUM(
-    "pending",
-    "processing",
-    "completed",
-    "failed",
-    name="task_status",
+    "PENDING",
+    "PROCESSING",
+    "COMPLETED",
+    "FAILED",
+    name="taskstatus",
     create_type=False,
 )
 
 transaction_type = ENUM(
-    "deposit", "withdraw", "task_payment", name="transaction_type", create_type=False
+    "DEPOSIT",
+    "WITHDRAWL",
+    "TASK_PAYMENT",
+    "CHARGE",
+    name="transactiontype",
+    create_type=False,
 )
 
 transaction_status = ENUM(
-    "pending", "completed", "failed", name="transaction_status", create_type=False
+    "PENDING",
+    "COMPLETED",
+    "FAILED",
+    "CANCELLED",
+    name="transactionstatus",
+    create_type=False,
 )
 
 

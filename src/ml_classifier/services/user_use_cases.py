@@ -17,7 +17,6 @@ from ml_classifier.infrastructure.security.password import (
     validate_email_format,
 )
 
-# Password context for direct hashing when needed
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
@@ -47,16 +46,13 @@ class UserUseCase:
         Returns:
             Tuple[bool, str, Optional[User]]: (success, message, created_user)
         """
-        # Validate email format
         if not validate_email_format(email):
             return False, "Invalid email format.", None
 
-        # Validate password strength
         valid_password, error_msg = validate_password_strength(password)
         if not valid_password:
             return False, error_msg, None
 
-        # Check if email is already registered
         existing_user = await self.user_repository.get_by_email(email)
         if existing_user:
             return False, f"Email {email} is already registered.", None
@@ -153,19 +149,14 @@ class UserUseCase:
         if not user:
             return False, f"User with ID {user_id} not found."
 
-        # Verify current password
         if not user.verify_password(current_password):
             return False, "Current password is incorrect."
-
-        # Validate new password strength
         valid_password, error_msg = validate_password_strength(new_password)
         if not valid_password:
             return False, error_msg
 
-        # Hash and update password
         hashed_password = pwd_context.hash(new_password)
 
-        # Create a new user instance with updated password
         updated_user = User(
             id=user.id,
             email=user.email,

@@ -27,6 +27,7 @@ from ml_classifier.controller.profile_controller import router as profile_router
 from ml_classifier.controller.admin_user_controller import router as admin_user_router
 from ml_classifier.controller.admin_model_controller import router as admin_model_router
 from ml_classifier.controller.prediction_controller import router as prediction_router
+from ml_classifier.controller.billing_controller import router as billing_router
 
 setup_logging()
 
@@ -36,17 +37,17 @@ class AppSettings:
 
     title = "ML Classifier Service"
     description = """
-        # ML Classifier Service
+        ML Classifier Service
 
         Сервис машинного обучения для классификации отзывов студентов.
 
-        ## Функциональность
+        Функциональность
 
         * **Классификация текста** - анализ отзывов студентов
         * **Асинхронная обработка** - обработка больших объемов данных
         * **API интерфейс** - простой доступ к функциональности
 
-        ## Технический стек
+        Технический стек
 
         * FastAPI
         * PostgreSQL
@@ -240,6 +241,8 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(profile_router)
     app.include_router(admin_user_router)
+
+    app.include_router(billing_router)
 
     app.include_router(admin_model_router)
     app.include_router(prediction_router)

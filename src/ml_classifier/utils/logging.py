@@ -22,7 +22,6 @@ class LogLevel(str, Enum):
 class LogConfig:
     """Logging configuration."""
 
-    # Environment variables
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     LOG_DIR: str = os.getenv("LOG_DIR", "logs")
     LOG_ROTATION: str = os.getenv("LOG_ROTATION", "10 MB")
@@ -38,13 +37,10 @@ class LogConfig:
 
 def setup_logging() -> None:
     """Configure logging for the application."""
-    # Remove default loggers
     logger.remove()
 
-    # Create logs directory if it doesn't exist
     os.makedirs(LogConfig.LOG_DIR, exist_ok=True)
 
-    # Add stderr logger with coloring
     logger.add(
         sys.stderr,
         format=LogConfig.LOG_FORMAT,
@@ -54,7 +50,6 @@ def setup_logging() -> None:
         diagnose=True,
     )
 
-    # Add file logger with rotation
     logger.add(
         os.path.join(LogConfig.LOG_DIR, "ml_classifier_{time}.log"),
         rotation=LogConfig.LOG_ROTATION,
@@ -66,7 +61,6 @@ def setup_logging() -> None:
         diagnose=True,
     )
 
-    # Add separate file for error logs
     logger.add(
         os.path.join(LogConfig.LOG_DIR, "ml_classifier_error_{time}.log"),
         rotation=LogConfig.LOG_ROTATION,
@@ -80,7 +74,6 @@ def setup_logging() -> None:
         diagnose=True,
     )
 
-    # Log application startup with environment details
     log_app_startup()
 
 

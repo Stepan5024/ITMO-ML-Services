@@ -42,7 +42,6 @@ class ModelUseCase:
         self.version_repository = version_repository
         self.model_storage_path = model_storage_path
 
-        # Create storage directory if it doesn't exist
         os.makedirs(self.model_storage_path, exist_ok=True)
 
     async def create_model(
@@ -57,12 +56,10 @@ class ModelUseCase:
         Returns:
             Tuple[bool, str, Optional[MLModel]]: (success, message, created_model)
         """
-        # Check if model with same name already exists
         existing_model = await self.model_repository.get_by_name(model_data["name"])
         if existing_model:
             return False, f"Model with name '{model_data['name']}' already exists", None
 
-        # Validate required fields
         required_fields = [
             "name",
             "model_type",
@@ -75,13 +72,11 @@ class ModelUseCase:
                 return False, f"Missing required field: {field}", None
 
         try:
-            # Validate enums
             model_type = ModelType(model_data["model_type"])
             algorithm = ModelAlgorithm(model_data["algorithm"])
         except ValueError as e:
             return False, f"Invalid enum value: {str(e)}", None
 
-        # Create model entity
         model = MLModel(
             id=uuid.uuid4(),
             name=model_data["name"],
@@ -113,12 +108,10 @@ class ModelUseCase:
         Returns:
             Tuple[bool, str, Optional[MLModel]]: (success, message, updated_model)
         """
-        # Get existing model
         model = await self.model_repository.get_by_id(model_id)
         if not model:
             return False, f"Model with ID {model_id} not found", None
 
-        # Check name uniqueness if changed
         if "name" in model_data and model_data["name"] != model.name:
             existing = await self.model_repository.get_by_name(model_data["name"])
             if existing and existing.id != model_id:
@@ -128,7 +121,6 @@ class ModelUseCase:
                     None,
                 )
 
-        # Parse enums if provided
         model_type = model.model_type
         algorithm = model.algorithm
 
@@ -144,7 +136,6 @@ class ModelUseCase:
             except ValueError as e:
                 return False, f"Invalid algorithm: {str(e)}", None
 
-        # Create updated model entity
         updated_model = MLModel(
             id=model.id,
             name=model_data.get("name", model.name),
@@ -242,7 +233,6 @@ class ModelUseCase:
             models = await self.model_repository.list(skip=skip, limit=limit)
             total = await self.model_repository.count()
 
-        # Apply is_active filter if specified
         if is_active is not None:
             models = [model for model in models if model.is_active == is_active]
 
@@ -351,37 +341,29 @@ class ModelVersionUseCase:
         if existing:
             return False, f"Version {version} already exists", None
 
-        # Create directory structure
         model_dir = os.path.join(self.model_storage_path, str(model_id))
         os.makedirs(model_dir, exist_ok=True)
 
-        # Generate a version ID
         version_id = uuid.uuid4()
         version_dir = os.path.join(model_dir, str(version_id))
         os.makedirs(version_dir, exist_ok=True)
 
-        # Save model file
         model_file_path = os.path.join(version_dir, "model.joblib")
         vectorizer_file_path = None
 
         try:
-            # Save model file
             model_contents = await model_file.read()
             model_file_size = len(model_contents)
 
             with open(model_file_path, "wb") as f:
                 f.write(model_contents)
 
-            # Test model loading
             try:
                 joblib.load(model_file_path)
             except Exception as e:
-                # Clean up on failure
                 if os.path.exists(model_file_path):
                     os.remove(model_file_path)
                 return False, f"Invalid model file: {str(e)}", None
-
-            # Save vectorizer if provided
             if vectorizer_file:
                 vectorizer_file_path = os.path.join(version_dir, "vectorizer.pkl")
                 vectorizer_contents = await vectorizer_file.read()
@@ -389,21 +371,16 @@ class ModelVersionUseCase:
                 with open(vectorizer_file_path, "wb") as f:
                     f.write(vectorizer_contents)
 
-                # Test vectorizer loading
                 try:
                     joblib.load(vectorizer_file_path)
                 except Exception as e:
-                    # Clean up on failure
                     if os.path.exists(vectorizer_file_path):
                         os.remove(vectorizer_file_path)
                     if os.path.exists(model_file_path):
                         os.remove(model_file_path)
                     return False, f"Invalid vectorizer file: {str(e)}", None
-
-            # Check if this should be the default version
             is_default = await self._check_is_default(model_id)
 
-            # Create version entity
             version_entity = MLModelVersion(
                 id=version_id,
                 model_id=model_id,
@@ -417,7 +394,6 @@ class ModelVersionUseCase:
                 status=ModelVersionStatus(version_data.get("status", "trained")),
             )
             parameters = version_data.get("parameters", {}).copy()
-            # Add vectorizer information to parameters if available
             if vectorizer_file_path:
                 parameters["vectorizer_path"] = vectorizer_file_path
 
@@ -427,19 +403,17 @@ class ModelVersionUseCase:
                 version=version,
                 file_path=model_file_path,
                 metrics=version_data.get("metrics", {}),
-                parameters=parameters,  # Use the updated parameters
+                parameters=parameters,
                 is_default=is_default,
                 created_by=user_id,
                 file_size=model_file_size,
                 status=ModelVersionStatus(version_data.get("status", "trained")),
             )
 
-            # Save to database
             created = await self.version_repository.create(version_entity)
             return True, "Model version created successfully", created
 
         except Exception as e:
-            # Clean up on any error
             if os.path.exists(model_file_path):
                 os.remove(model_file_path)
             if vectorizer_file_path and os.path.exists(vectorizer_file_path):
@@ -487,16 +461,13 @@ class ModelVersionUseCase:
         Returns:
             Tuple[bool, str, Optional[MLModelVersion]]: (success, message, updated_version)
         """
-        # Get version
         version = await self.version_repository.get_by_id(version_id)
         if not version:
             return False, f"Version with ID {version_id} not found", None
 
         try:
-            # Unset all other versions as default
             await self.version_repository.unset_default_versions(version.model_id)
 
-            # Set this version as default
             updated = await self.version_repository.set_default_version(version_id)
             return True, "Default version set successfully", updated
         except Exception as e:
@@ -512,14 +483,11 @@ class ModelVersionUseCase:
         Returns:
             Tuple[bool, str]: (success, message)
         """
-        # Get version
         version = await self.version_repository.get_by_id(version_id)
         if not version:
             return False, f"Version with ID {version_id} not found"
 
-        # Check if this is the default version
         if version.is_default:
-            # Check if this is the only version
             versions = await self.version_repository.get_by_model_id(version.model_id)
             if len(versions) > 1:
                 return (
@@ -528,11 +496,9 @@ class ModelVersionUseCase:
                 )
 
         try:
-            # Delete file
             if os.path.exists(version.file_path):
                 os.remove(version.file_path)
 
-            # Delete from repository
             success = await self.version_repository.delete(version_id)
             if success:
                 return True, "Version deleted successfully"
@@ -566,7 +532,6 @@ class ModelVersionUseCase:
         Returns:
             Tuple[bool, str, Optional[Dict]]: (success, message, comparison_result)
         """
-        # Get both versions
         version1 = await self.version_repository.get_by_id(version_id1)
         if not version1:
             return False, f"Version with ID {version_id1} not found", None
@@ -575,16 +540,13 @@ class ModelVersionUseCase:
         if not version2:
             return False, f"Version with ID {version_id2} not found", None
 
-        # Check if versions belong to the same model
         if version1.model_id != version2.model_id:
             return False, "Cannot compare versions from different models", None
 
-        # Compare metrics
         try:
             metrics1 = version1.metrics
             metrics2 = version2.metrics
 
-            # Find common metrics
             common_metrics = set(metrics1.keys()) & set(metrics2.keys())
 
             result = {
@@ -601,7 +563,6 @@ class ModelVersionUseCase:
                 "comparison": {},
             }
 
-            # Calculate differences
             for metric in common_metrics:
                 if isinstance(metrics1[metric], (int, float)) and isinstance(
                     metrics2[metric], (int, float)
@@ -642,7 +603,6 @@ class ModelVersionUseCase:
         return bool(re.match(pattern, version))
 
 
-# Factory functions for dependency injection
 def get_model_use_case(
     model_repository: MLModelRepository,
     version_repository: MLModelVersionRepository,
