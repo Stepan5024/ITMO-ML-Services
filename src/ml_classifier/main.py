@@ -28,6 +28,10 @@ from ml_classifier.controller.admin_user_controller import router as admin_user_
 from ml_classifier.controller.admin_model_controller import router as admin_model_router
 from ml_classifier.controller.prediction_controller import router as prediction_router
 from ml_classifier.controller.billing_controller import router as billing_router
+from ml_classifier.controller.task_controller import router as task_router
+from ml_classifier.controller.async_controller import router as async_router
+from ml_classifier.controller.report_controller import router as report_router
+
 
 setup_logging()
 
@@ -241,6 +245,11 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(profile_router)
     app.include_router(admin_user_router)
+
+    # Include task router
+    app.include_router(task_router)
+    app.include_router(async_router)
+    app.include_router(report_router)
 
     app.include_router(billing_router)
 

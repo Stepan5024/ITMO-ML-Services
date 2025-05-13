@@ -39,13 +39,12 @@ class User(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    # Отношения
     tasks: Mapped[list["Task"]] = relationship(
         "Task", back_populates="user", cascade="all, delete-orphan"
-    )  # type: ignore
+    )
     transactions: Mapped[list["Transaction"]] = relationship(
         "Transaction", back_populates="user", cascade="all, delete-orphan"
-    )  # type: ignore
+    )
 
 
 class Model(Base):
@@ -66,10 +65,9 @@ class Model(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    # Отношения
     tasks: Mapped[list["Task"]] = relationship(
         "Task", back_populates="model", cascade="all, delete-orphan"
-    )  # type: ignore
+    )
 
 
 class Task(Base):
@@ -96,13 +94,12 @@ class Task(Base):
     )
     completed_at = Column(DateTime)
 
-    # Отношения
     user: Mapped["User"] = relationship("User", back_populates="tasks")
     model: Mapped["Model"] = relationship("Model", back_populates="tasks")
 
     transactions: Mapped[List["Transaction"]] = relationship(
         "Transaction", back_populates="task", cascade="all, delete-orphan"
-    )  # type: ignore
+    )
 
 
 class Transaction(Base):
@@ -126,7 +123,6 @@ class Transaction(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    # Отношения
     user: Mapped["User"] = relationship("User", back_populates="transactions")
     task: Mapped[Optional["Task"]] = relationship("Task", back_populates="transactions")
 
@@ -150,7 +146,6 @@ class MLModel(Base):
         DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    # Relationship to versions
     versions = relationship(
         "MLModelVersion", back_populates="model", cascade="all, delete-orphan"
     )
@@ -180,9 +175,7 @@ class MLModelVersion(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    # Relationships
     model = relationship("MLModel", back_populates="versions")
     creator = relationship("User")
 
-    # Unique constraint for model_id + version
     __table_args__ = ({"sqlite_autoincrement": True},)

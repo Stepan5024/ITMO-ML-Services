@@ -32,6 +32,7 @@ transaction_type = ENUM(
     "WITHDRAWL",
     "TASK_PAYMENT",
     "CHARGE",
+    "REFUND",
     name="transactiontype",
     create_type=False,
 )

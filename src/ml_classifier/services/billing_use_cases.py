@@ -83,25 +83,11 @@ class BillingUseCase:
             raise ValueError(f"User with ID {user_id} not found")
 
         try:
-            # Create deposit transaction
-            transaction = Transaction(
-                user_id=user_id,
-                amount=amount,
-                type=TransactionType.DEPOSIT,
-                status=TransactionStatus.PENDING,
-                description=description,
-                created_at=datetime.utcnow(),
-            )
-
-            # Create and save transaction
             transaction = await self.transaction_repository.create_deposit_transaction(
                 user_id, amount, description
             )
-
-            # Update user balance
             updated_user = await self.user_repository.update_balance(user_id, amount)
 
-            # Mark transaction as completed
             completed_transaction = transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 
@@ -142,24 +128,18 @@ class BillingUseCase:
             )
 
         try:
-            # Create withdrawal transaction with negative amount
             transaction = Transaction(
                 id=uuid4(),
                 user_id=user_id,
-                amount=-amount,  # Negative for withdrawal
+                amount=-amount,
                 type=TransactionType.WITHDRAWAL,
                 status=TransactionStatus.PENDING,
                 description=description,
                 created_at=datetime.utcnow(),
             )
-
-            # Create and save transaction
             created_transaction = await self.transaction_repository.create(transaction)
-
-            # Update user balance
             updated_user = await self.user_repository.update_balance(user_id, -amount)
 
-            # Mark transaction as completed
             completed_transaction = created_transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 
@@ -200,12 +180,10 @@ class BillingUseCase:
             )
 
         try:
-            # Create charge transaction
             transaction = await self.transaction_repository.create_charge_transaction(
                 user_id=user_id, amount=amount, task_id=task_id
             )
 
-            # Update user balance
             updated_user = await self.user_repository.update_balance(user_id, -amount)
 
             return transaction, updated_user.balance
@@ -230,7 +208,6 @@ class BillingUseCase:
             ValueError: If original transaction not found or not eligible for refund
             TransactionError: On refund processing error
         """
-        # Get original transaction
         original_transaction = await self.transaction_repository.get_by_id(
             transaction_id
         )
@@ -244,14 +221,13 @@ class BillingUseCase:
             raise ValueError("Only completed transactions can be refunded")
 
         user_id = original_transaction.user_id
-        refund_amount = abs(original_transaction.amount)  # Make positive for refund
+        refund_amount = abs(original_transaction.amount)
 
         try:
-            # Create refund transaction
             refund_transaction = Transaction(
                 id=uuid4(),
                 user_id=user_id,
-                amount=refund_amount,  # Positive amount for refund
+                amount=refund_amount,
                 type=TransactionType.REFUND,
                 status=TransactionStatus.PENDING,
                 reference_id=original_transaction.id,
@@ -259,17 +235,12 @@ class BillingUseCase:
                 created_at=datetime.utcnow(),
             )
 
-            # Create and save transaction
             created_transaction = await self.transaction_repository.create(
                 refund_transaction
             )
-
-            # Update user balance
             updated_user = await self.user_repository.update_balance(
                 user_id, refund_amount
             )
-
-            # Mark refund transaction as completed
             completed_transaction = created_transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 

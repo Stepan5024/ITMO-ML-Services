@@ -18,6 +18,7 @@ class TransactionType(str, Enum):
     WITHDRAWAL = "withdrawal"
     CHARGE = "charge"
     TASK_PAYMENT = "task_payment"
+    REFUND = "refund"
 
 
 class TransactionStatus(str, Enum):

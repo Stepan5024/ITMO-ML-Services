@@ -8,24 +8,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import text
 
-# Create the SQLAlchemy base model
 Base = declarative_base()
 
-# Формирование URL для подключения к базе данных - MODIFIED THIS LINE
-# Database connection details from environment
 DATABASE_USER = os.getenv("POSTGRES_USER", "ml_user")
 DATABASE_PASSWORD = os.getenv("POSTGRES_PASSWORD", "change_this_password")
 DATABASE_HOST = os.getenv("POSTGRES_HOST", "postgres")
 DATABASE_PORT = os.getenv("POSTGRES_PORT", "5432")
 DATABASE_NAME = os.getenv("POSTGRES_DB", "ml_classifier_db")
 
-# Use ASYNC_DATABASE_URL for the async engine
 ASYNC_DATABASE_URL = os.getenv(
     "ASYNC_DATABASE_URL",
     f"postgresql+asyncpg://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}",
 )
 
-# Create the async engine
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     echo=os.getenv("SQL_ECHO", "False").lower() == "true",
@@ -34,7 +29,6 @@ engine = create_async_engine(
     max_overflow=int(os.getenv("DATABASE_MAX_OVERFLOW", "10")),
 )
 
-# Создание фабрики сессий
 AsyncSessionMaker = async_sessionmaker(
     engine,
     autocommit=False,

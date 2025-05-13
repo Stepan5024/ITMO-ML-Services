@@ -9,7 +9,9 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - ASYNC_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379/0
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
     volumes:
@@ -44,18 +46,29 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    command: redis-server --appendonly yes
     networks:
       - ml-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   celery:
     build: .
-    command: celery -A ml_classifier.tasks.celery_app worker --loglevel=info
+    command: celery -A ml_classifier.infrastructure.queue.celery_app:celery_app worker --loglevel=info
     volumes:
       - ./src:/app/src
+      - ./models:/app/models
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
     depends_on:
@@ -65,6 +78,40 @@ services:
     networks:
       - ml-network
     restart: unless-stopped
+
+  celery-beat:
+    build: .
+    command: celery -A ml_classifier.infrastructure.queue.celery_app:celery_app beat --loglevel=info
+    volumes:
+      - ./src:/app/src
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    depends_on:
+      - redis
+      - celery
+    networks:
+      - ml-network
+    restart: unless-stopped
+
+  flower:
+    image: mher/flower
+    command: celery --broker=redis://redis:6379/1 flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery
+    environment:
+      - FLOWER_BASIC_AUTH=admin:adminpassword
+    networks:
+      - ml-network
+    restart: unless-stopped
+
 
 networks:
   ml-network:
