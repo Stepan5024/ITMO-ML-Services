@@ -1,42 +1,51 @@
-"""Authorization service for checking user permissions."""
+"""Сервис авторизации для проверки прав доступа пользователя."""
 
+import logging
 from ml_classifier.domain.entities.role import Permission, RoleType
 from ml_classifier.domain.entities.user import User
+
+logger = logging.getLogger(__name__)
 
 
 def has_role(user: User, role: RoleType) -> bool:
     """
-    Check if a user has a specific role.
+    Проверяет, имеет ли пользователь указанную роль.
 
     Args:
-        user: User to check
-        role: Role to check for
+        user: Пользователь, которого проверяем.
+        role: Роль, наличие которой необходимо проверить.
 
     Returns:
-        bool: True if user has the role
+        bool: True, если пользователь обладает указанной ролью.
     """
+    result = False
     if role == RoleType.ADMIN:
-        return user.is_admin
+        result = user.is_admin
     elif role == RoleType.USER:
-        return user.is_active
-    return False
+        result = user.is_active
+
+    logger.debug(f"Проверка роли: user_id={user.id}, role={role}, result={result}")
+    return result
 
 
 def get_permissions_for_user(user: User) -> list[Permission]:
     """
-    Get all permissions for a user based on their roles.
+    Возвращает список разрешений, доступных пользователю, исходя из его ролей.
 
     Args:
-        user: User to get permissions for
+        user: Пользователь, для которого получаем разрешения.
 
     Returns:
-        list[Permission]: List of permissions
+        list[Permission]: Список разрешений пользователя.
     """
-    permissions = []
-
     if user.is_admin:
-        return list(Permission)
+        permissions = list(Permission)
+        logger.debug(
+            f"Права пользователя (админ): user_id={user.id}, permissions={permissions}"
+        )
+        return permissions
 
+    permissions = []
     if user.is_active:
         permissions.extend(
             [
@@ -48,39 +57,42 @@ def get_permissions_for_user(user: User) -> list[Permission]:
             ]
         )
 
+    logger.debug(f"Права пользователя: user_id={user.id}, permissions={permissions}")
     return permissions
 
 
 def has_permission(user: User, permission: Permission) -> bool:
     """
-    Check if a user has a specific permission.
+    Проверяет, имеет ли пользователь указанное разрешение.
 
     Args:
-        user: User to check
-        permission: Permission to check for
+        user: Пользователь, которого проверяем.
+        permission: Разрешение, которое необходимо проверить.
 
     Returns:
-        bool: True if user has the permission
+        bool: True, если пользователь обладает данным разрешением.
     """
     permissions = get_permissions_for_user(user)
-    return permission in permissions
+    result = permission in permissions
+    logger.debug(
+        f"Проверка разрешения: user_id={user.id}, permission={permission}, result={result}"
+    )
+    return result
 
 
 def can_access_user_data(user: User, target_user_id: str) -> bool:
     """
-    Check if a user can access another user's data.
+    Проверяет, может ли пользователь получить доступ к данным другого пользователя.
 
     Args:
-        user: User attempting to access data
-        target_user_id: ID of the user whose data is being accessed
+        user: Пользователь, запрашивающий доступ.
+        target_user_id: ID пользователя, к чьим данным осуществляется доступ.
 
     Returns:
-        bool: True if access is allowed
+        bool: True, если доступ разрешён.
     """
-    if str(user.id) == target_user_id:
-        return True
-
-    if user.is_admin:
-        return True
-
-    return False
+    result = str(user.id) == target_user_id or user.is_admin
+    logger.debug(
+        f"Проверка доступа к данным пользователя: user_id={user.id}, target_user_id={target_user_id}, result={result}"
+    )
+    return result

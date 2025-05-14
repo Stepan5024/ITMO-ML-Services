@@ -1,4 +1,13 @@
-"""Admin user management use cases."""
+"""
+Администрирование пользователей — use case-слой.
+
+Реализует бизнес-логику управления пользователями:
+- Просмотр списка пользователей с фильтрами
+- Получение пользователя по ID
+- Изменение статуса активности
+- Назначение/снятие прав администратора
+"""
+
 import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
@@ -18,23 +27,29 @@ logger = logging.getLogger(__name__)
 
 
 class AdminUserUseCase:
-    """Use case for admin user management operations."""
+    """
+    Use Case для операций администрирования пользователей.
+    """
 
     def __init__(self, user_repository: UserRepository):
-        """Initialize with user repository."""
+        """
+        Инициализация с репозиторием пользователей.
+
+        :param user_repository: Репозиторий пользователей
+        """
         self.user_repository = user_repository
 
     async def list_users(self, filters: AdminUserFilter) -> Tuple[List[User], int]:
         """
-        Get a list of users with filtering and pagination.
+        Получить список пользователей с возможностью фильтрации и пагинации.
 
-        Args:
-            filters: Filter criteria
-
-        Returns:
-            Tuple[List[User], int]: List of users and total count
+        :param filters: Критерии фильтрации
+        :return: Список пользователей и общее количество после фильтрации
         """
         offset = (filters.page - 1) * filters.size
+        logger.debug(
+            f"Получение списка пользователей: offset={offset}, size={filters.size}"
+        )
 
         all_users = await self.user_repository.list(skip=offset, limit=filters.size)
 
@@ -57,37 +72,41 @@ class AdminUserUseCase:
             filtered_users.append(user)
 
         filtered_count = len(filtered_users)
-
+        logger.info(f"Найдено пользователей после фильтрации: {filtered_count}")
         return filtered_users, filtered_count
 
     async def get_user(self, user_id: UUID) -> Optional[User]:
         """
-        Get a user by ID.
+        Получить пользователя по ID.
 
-        Args:
-            user_id: User ID
-
-        Returns:
-            Optional[User]: User if found
+        :param user_id: Идентификатор пользователя
+        :return: Пользователь, если найден
         """
-        return await self.user_repository.get_by_id(user_id)
+        logger.debug(f"Запрос пользователя по ID: {user_id}")
+        user = await self.user_repository.get_by_id(user_id)
+        if user:
+            logger.info(f"Пользователь найден: {user.email}")
+        else:
+            logger.warning(f"Пользователь не найден: {user_id}")
+        return user
 
     async def update_user_status(
         self, user_id: UUID, is_active: bool
     ) -> Tuple[bool, str, Optional[User]]:
         """
-        Update a user's active status.
+        Изменить статус активности пользователя.
 
-        Args:
-            user_id: User ID
-            is_active: New active status
-
-        Returns:
-            Tuple[bool, str, Optional[User]]: Success, message, updated user
+        :param user_id: Идентификатор пользователя
+        :param is_active: Новый статус активности (True/False)
+        :return: Успех, сообщение, обновлённый пользователь
         """
+        logger.info(
+            f"Изменение статуса активности пользователя {user_id} -> {is_active}"
+        )
         user = await self.user_repository.get_by_id(user_id)
         if not user:
-            return False, f"User with ID {user_id} not found", None
+            logger.warning(f"Пользователь не найден: {user_id}")
+            return False, f"Пользователь с ID {user_id} не найден", None
 
         updated_user = User(
             id=user.id,
@@ -103,29 +122,32 @@ class AdminUserUseCase:
 
         try:
             result = await self.user_repository.update(updated_user)
-            status_str = "activated" if is_active else "deactivated"
-            logger.info(f"User {user_id} has been {status_str}")
-            return True, f"User has been {status_str}", result
+            status_str = "активирован" if is_active else "деактивирован"
+            logger.info(f"Пользователь {user_id} был {status_str}")
+            return True, f"Пользователь был {status_str}", result
         except Exception as e:
-            logger.error(f"Error updating user status: {e}")
-            return False, f"Error updating user status: {str(e)}", None
+            logger.exception(
+                f"Ошибка при обновлении статуса активности пользователя {user_id}: {e}"
+            )
+            return False, f"Ошибка при обновлении: {str(e)}", None
 
     async def set_admin_status(
         self, user_id: UUID, is_admin: bool
     ) -> Tuple[bool, str, Optional[User]]:
         """
-        Set a user's admin status.
+        Назначить или снять права администратора у пользователя.
 
-        Args:
-            user_id: User ID
-            is_admin: New admin status
-
-        Returns:
-            Tuple[bool, str, Optional[User]]: Success, message, updated user
+        :param user_id: Идентификатор пользователя
+        :param is_admin: Новый статус администратора (True/False)
+        :return: Успех, сообщение, обновлённый пользователь
         """
+        logger.info(
+            f"Изменение прав администратора пользователя {user_id} -> {is_admin}"
+        )
         user = await self.user_repository.get_by_id(user_id)
         if not user:
-            return False, f"User with ID {user_id} not found", None
+            logger.warning(f"Пользователь не найден: {user_id}")
+            return False, f"Пользователь с ID {user_id} не найден", None
 
         updated_user = User(
             id=user.id,
@@ -142,22 +164,34 @@ class AdminUserUseCase:
         try:
             result = await self.user_repository.update(updated_user)
             status_str = (
-                "granted admin privileges" if is_admin else "revoked admin privileges"
+                "назначен администратором" if is_admin else "лишён прав администратора"
             )
-            logger.info(f"User {user_id} has been {status_str}")
-            return True, f"User has been {status_str}", result
+            logger.info(f"Пользователь {user_id} был {status_str}")
+            return True, f"Пользователь был {status_str}", result
         except Exception as e:
-            logger.error(f"Error updating admin status: {e}")
-            return False, f"Error updating admin status: {str(e)}", None
+            logger.exception(
+                f"Ошибка при изменении прав администратора пользователя {user_id}: {e}"
+            )
+            return False, f"Ошибка при обновлении: {str(e)}", None
 
 
 async def get_admin_user_repository(session=Depends(get_db)) -> UserRepository:
-    """Dependency to get UserRepository implementation."""
+    """
+    Зависимость для получения реализации репозитория пользователей.
+
+    :param session: Сессия базы данных
+    :return: Экземпляр репозитория пользователей
+    """
     return SQLAlchemyUserRepository(session)
 
 
 def get_admin_user_use_case(
     user_repo: UserRepository = Depends(get_admin_user_repository),
 ) -> AdminUserUseCase:
-    """Dependency to get AdminUserUseCase instance."""
+    """
+    Зависимость для получения экземпляра AdminUserUseCase.
+
+    :param user_repo: Репозиторий пользователей
+    :return: Use Case для администрирования пользователей
+    """
     return AdminUserUseCase(user_repo)

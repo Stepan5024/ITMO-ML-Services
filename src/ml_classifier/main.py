@@ -276,7 +276,6 @@ def create_app() -> FastAPI:
     app.include_router(profile_router)
     app.include_router(admin_user_router)
     app.include_router(classification_router)
-    # Include task router
     app.include_router(task_router)
     app.include_router(async_router)
     app.include_router(report_router)

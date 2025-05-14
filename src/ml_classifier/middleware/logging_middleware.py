@@ -27,6 +27,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
 
         logger.debug(f"Request [{request_id}] headers: {request.headers}")
+        logger.bind(request_id=request_id).info(
+            f"Request: {request.method} {request.url}"
+        )
 
         try:
             response = await call_next(request)
@@ -35,6 +38,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             logger.info(
                 f"Response [{request_id}]: {request.method} {request.url.path} "
                 f"status_code={response.status_code} processed in {process_time:.4f}s"
+            )
+            logger.bind(request_id=request_id).info(
+                f"Response status: {response.status_code} | Time: {process_time}s"
             )
 
             return response
