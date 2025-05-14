@@ -87,3 +87,24 @@ def logout():
     st.session_state.pop(TOKEN_SESSION_KEY, None)
     st.session_state.pop(USER_SESSION_KEY, None)
     logger.debug(f"Сессия после выхода: {list(st.session_state.keys())}")
+
+
+def check_admin_access():
+    """Check if user is logged in and has admin privileges."""
+    logger.debug("Проверка административных прав пользователя")
+    # First check if user is logged in
+    if not check_login():
+        return False
+
+    # Then check if user has admin privileges
+    user_info = st.session_state.get(USER_SESSION_KEY, {})
+    if not user_info.get("is_admin", False):
+        logger.warning(
+            f"Пользователь {user_info.get('email', 'unknown')} не имеет прав администратора"
+        )
+        st.error("У вас нет прав администратора для доступа к этой странице")
+        st.switch_page("app.py")
+        return False
+
+    logger.success(f"Пользователь {user_info.get('email')} имеет права администратора")
+    return True

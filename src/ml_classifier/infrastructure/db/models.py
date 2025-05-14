@@ -65,10 +65,6 @@ class Model(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
-        "Task", back_populates="model", cascade="all, delete-orphan"
-    )
-
 
 class Task(Base):
     """Модель задачи классификации в базе данных."""
@@ -80,7 +76,7 @@ class Task(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
     model_id = Column(
-        UUID(as_uuid=True), ForeignKey("models.id"), nullable=False, index=True
+        UUID(as_uuid=True), ForeignKey("ml_models.id"), nullable=False, index=True
     )
     input_text = Column(Text, nullable=False)
     result = Column(JSONB)
@@ -95,7 +91,7 @@ class Task(Base):
     completed_at = Column(DateTime)
 
     user: Mapped["User"] = relationship("User", back_populates="tasks")
-    model: Mapped["Model"] = relationship("Model", back_populates="tasks")
+    model: Mapped["MLModel"] = relationship("MLModel", back_populates="tasks")
 
     transactions: Mapped[List["Transaction"]] = relationship(
         "Transaction", back_populates="task", cascade="all, delete-orphan"
@@ -149,6 +145,7 @@ class MLModel(Base):
     versions = relationship(
         "MLModelVersion", back_populates="model", cascade="all, delete-orphan"
     )
+    tasks: Mapped[list["Task"]] = relationship("Task", back_populates="model")
 
 
 class MLModelVersion(Base):

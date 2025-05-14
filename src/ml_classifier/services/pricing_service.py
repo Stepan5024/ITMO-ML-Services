@@ -66,29 +66,22 @@ class PricingService:
         if not model:
             raise ValueError(f"Model with ID {model_id} not found")
 
-        # Get base price from model
         base_price = model.price_per_call
 
-        # Calculate complexity factor
         complexity_factor = Decimal(str(self._calculate_complexity_factor(input_data)))
 
-        # Calculate priority factor
         priority_factor = Decimal(str(self._calculate_priority_factor(priority)))
 
-        # Calculate batch discount
         volume_discount = self._calculate_volume_discount(batch_size, base_price)
 
-        # Calculate base cost with all factors
         batch_size_decimal = Decimal(str(batch_size))
 
         base_cost = (
             base_price * complexity_factor * priority_factor * batch_size_decimal
         )
 
-        # Apply discounts
         discounted_cost = base_cost - volume_discount
 
-        # Calculate discount percentage
         if base_cost > Decimal("0"):
             discount_percentage = (volume_discount / base_cost) * Decimal("100")
         else:
@@ -119,7 +112,6 @@ class PricingService:
         Returns:
             Decimal: Discounted cost
         """
-        # Simple implementation - apply base discount to all users
         discount = (base_cost * self.base_discount_percent) / Decimal("100")
         return base_cost - discount
 
@@ -147,11 +139,9 @@ class PricingService:
         batch_size_decimal = Decimal(str(batch_size))
         base_cost = model.price_per_call * batch_size_decimal
 
-        # Apply priority factor
         priority_factor = Decimal(str(self._calculate_priority_factor(priority)))
         base_cost = base_cost * priority_factor
 
-        # Apply volume discount
         volume_discount = self._calculate_volume_discount(
             batch_size, model.price_per_call
         )
@@ -168,7 +158,6 @@ class PricingService:
         Returns:
             float: Complexity factor
         """
-        # Simple implementation - check text length if available
         if "text" in input_data and isinstance(input_data["text"], str):
             text_length = len(input_data["text"])
             if text_length > self.text_size_threshold:

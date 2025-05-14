@@ -16,7 +16,7 @@ async def _async_cleanup_stale_transactions() -> int:
         transaction_repo = SQLAlchemyTransactionRepository(db_session)
         transaction_manager = TransactionManager(
             transaction_repository=transaction_repo,
-            user_repository=None,  # TODO: Add proper user repository
+            user_repository=None,
         )
         return await transaction_manager.cleanup_stale_transactions()
 
@@ -31,7 +31,6 @@ def cleanup_stale_transactions():
     logger.info("Starting cleanup of stale transactions")
 
     try:
-        # Execute async operation
         count = asyncio.run(_async_cleanup_stale_transactions())
 
         elapsed_time = (datetime.utcnow() - start_time).total_seconds()
@@ -62,9 +61,6 @@ def generate_daily_report():
     logger.info(f"Starting daily report generation for {yesterday}")
 
     try:
-        # Placeholder for actual report generation logic
-        # Add async operations here if needed following the same pattern
-
         elapsed_time = (datetime.utcnow() - start_time).total_seconds()
         logger.info(f"Daily report generated for {yesterday} in {elapsed_time:.2f}s")
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
+import time
 
 from loguru import logger
 
@@ -54,12 +55,29 @@ class BillingUseCase:
         Raises:
             ValueError: Если пользователь не найден
         """
-        logger.info(f"Получение баланса для пользователя {user_id}")
-        user = await self.user_repository.get_by_id(user_id)
-        if not user:
-            logger.error(f"Пользователь {user_id} не найден")
-            raise ValueError(f"User with ID {user_id} not found")
-        return user.balance
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос баланса для пользователя: {user_id}")
+
+        try:
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(f"[{operation_id}] Пользователь {user_id} не найден")
+                raise ValueError(f"User with ID {user_id} not found")
+
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Баланс пользователя получен: user_id={user_id}, email={user.email},"
+                f" balance={float(user.balance)} | Время выполнения: {execution_time:.3f}с"
+            )
+            return user.balance
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при получении баланса пользователя {user_id}: {str(e)}"
+                f" | Время выполнения: {execution_time:.3f}с"
+            )
+            raise
 
     async def deposit(
         self, user_id: UUID, amount: Decimal, description: str = "Пополнение"
@@ -79,29 +97,68 @@ class BillingUseCase:
             ValueError: Если сумма отрицательная или пользователь не найден
             TransactionError: Ошибка при обработке транзакции
         """
-        logger.info(f"Пополнение баланса пользователя {user_id} на сумму {amount}")
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Запрос на пополнение баланса: user_id={user_id}, сумма={float(amount)},"
+            f" описание='{description}'"
+        )
+
         if amount <= 0:
-            logger.error("Сумма пополнения должна быть положительной")
+            logger.error(
+                f"[{operation_id}] Ошибка валидации: сумма пополнения должна быть положительной: {float(amount)}"
+            )
             raise ValueError("Deposit amount must be positive")
 
-        user = await self.user_repository.get_by_id(user_id)
-        if not user:
-            logger.error(f"Пользователь {user_id} не найден")
-            raise ValueError(f"User with ID {user_id} not found")
-
         try:
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: пользователь {user_id} не найден"
+                )
+                raise ValueError(f"User with ID {user_id} not found")
+
+            logger.debug(
+                f"[{operation_id}] Данные пользователя: ID={user_id}, email={user.email},"
+                f" текущий баланс={float(user.balance)}"
+            )
+
+            # Создание транзакции пополнения
+            logger.debug(
+                f"[{operation_id}] Создание транзакции пополнения баланса: {float(amount)}"
+            )
             transaction = await self.transaction_repository.create_deposit_transaction(
                 user_id, amount, description
             )
+            logger.debug(
+                f"[{operation_id}] Транзакция создана: ID={transaction.id}, статус={transaction.status.value}"
+            )
+
+            # Обновление баланса пользователя
+            logger.debug(
+                f"[{operation_id}] Обновление баланса пользователя: {float(user.balance)} +"
+                f" {float(amount)} = {float(user.balance + amount)}"
+            )
             updated_user = await self.user_repository.update_balance(user_id, amount)
+
+            # Завершение транзакции
             completed_transaction = transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 
-            logger.success(f"Пополнение завершено: {completed_transaction}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Пополнение завершено: transaction_id={completed_transaction.id},"
+                f" user_id={user_id}, amount={float(amount)}, новый баланс={float(updated_user.balance)}"
+                f" | Время выполнения: {execution_time:.3f}с"
+            )
             return completed_transaction, updated_user.balance
 
         except Exception as e:
-            logger.exception("Ошибка при пополнении баланса")
+            execution_time = time.time() - start_time
+            logger.exception(
+                f"[{operation_id}] Ошибка при пополнении баланса пользователя {user_id} на сумму"
+                f" {float(amount)}: {str(e)} | Время выполнения: {execution_time:.3f}с"
+            )
             raise TransactionError(f"Error processing deposit: {str(e)}")
 
     async def withdraw(
@@ -123,25 +180,48 @@ class BillingUseCase:
             InsufficientBalanceError: Недостаточно средств
             TransactionError: Ошибка при обработке транзакции
         """
-        logger.info(f"Списание средств у пользователя {user_id} на сумму {amount}")
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Запрос на списание средств: user_id={user_id}, сумма={float(amount)},"
+            f" описание='{description}'"
+        )
+
         if amount <= 0:
-            logger.error("Сумма списания должна быть положительной")
+            logger.error(
+                f"[{operation_id}] Ошибка валидации: сумма списания должна быть положительной: {float(amount)}"
+            )
             raise ValueError("Withdrawal amount must be positive")
 
-        user = await self.user_repository.get_by_id(user_id)
-        if not user:
-            logger.error(f"Пользователь {user_id} не найден")
-            raise ValueError(f"User with ID {user_id} not found")
+        try:
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: пользователь {user_id} не найден"
+                )
+                raise ValueError(f"User with ID {user_id} not found")
 
-        if user.balance < amount:
-            logger.warning(f"Недостаточно средств у пользователя {user_id}")
-            raise InsufficientBalanceError(
-                f"Insufficient balance: {float(user.balance)} < {float(amount)}"
+            logger.debug(
+                f"[{operation_id}] Данные пользователя: ID={user_id}, email={user.email},"
+                f" текущий баланс={float(user.balance)}"
             )
 
-        try:
+            if user.balance < amount:
+                logger.warning(
+                    f"[{operation_id}] Недостаточно средств у пользователя {user_id}:"
+                    f" баланс={float(user.balance)}, требуется={float(amount)}"
+                )
+                raise InsufficientBalanceError(
+                    f"Insufficient balance: {float(user.balance)} < {float(amount)}"
+                )
+
+            # Создание транзакции списания
+            transaction_id = uuid4()
+            logger.debug(
+                f"[{operation_id}] Создание транзакции списания: ID={transaction_id}, сумма={float(-amount)}"
+            )
             transaction = Transaction(
-                id=uuid4(),
+                id=transaction_id,
                 user_id=user_id,
                 amount=-amount,
                 type=TransactionType.WITHDRAWAL,
@@ -149,16 +229,41 @@ class BillingUseCase:
                 description=description,
                 created_at=datetime.utcnow(),
             )
+
             created_transaction = await self.transaction_repository.create(transaction)
+            logger.debug(
+                f"[{operation_id}] Транзакция создана: ID={created_transaction.id},"
+                f" статус={created_transaction.status.value}"
+            )
+
+            # Обновление баланса пользователя
+            logger.debug(
+                f"[{operation_id}] Обновление баланса пользователя: {float(user.balance)} -"
+                f" {float(amount)} = {float(user.balance - amount)}"
+            )
             updated_user = await self.user_repository.update_balance(user_id, -amount)
+
+            # Завершение транзакции
             completed_transaction = created_transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 
-            logger.success(f"Списание завершено: {completed_transaction}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Списание завершено: transaction_id={completed_transaction.id},"
+                f" user_id={user_id}, amount={float(amount)}, новый баланс={float(updated_user.balance)}"
+                f" | Время выполнения: {execution_time:.3f}с"
+            )
             return completed_transaction, updated_user.balance
 
+        except InsufficientBalanceError:
+            # Пробрасываем ошибку недостаточного баланса выше
+            raise
         except Exception as e:
-            logger.exception("Ошибка при списании средств")
+            execution_time = time.time() - start_time
+            logger.exception(
+                f"[{operation_id}] Ошибка при списании средств у пользователя {user_id} на сумму {float(amount)}:"
+                f" {str(e)} | Время выполнения: {execution_time:.3f}с"
+            )
             raise TransactionError(f"Error processing withdrawal: {str(e)}")
 
     async def charge_for_prediction(
@@ -180,35 +285,77 @@ class BillingUseCase:
             InsufficientBalanceError: Недостаточно средств
             TransactionError: Ошибка при списании
         """
+        operation_id = str(uuid4())
+        start_time = time.time()
         logger.info(
-            f"Списание за предсказание: пользователь {user_id}, задача {task_id}, сумма {amount}"
+            f"[{operation_id}] Запрос на списание за предсказание: user_id={user_id}, task_id={task_id}, "
+            f"сумма={float(amount)}"
         )
+
         if amount <= 0:
-            logger.error("Сумма списания должна быть положительной")
+            logger.error(
+                f"[{operation_id}] Ошибка валидации: сумма списания должна быть положительной: {float(amount)}"
+            )
             raise ValueError("Charge amount must be positive")
 
-        user = await self.user_repository.get_by_id(user_id)
-        if not user:
-            logger.error(f"Пользователь {user_id} не найден")
-            raise ValueError(f"User with ID {user_id} not found")
+        try:
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: пользователь {user_id} не найден"
+                )
+                raise ValueError(f"User with ID {user_id} not found")
 
-        if user.balance < amount:
-            logger.warning(f"Недостаточно средств у пользователя {user_id}")
-            raise InsufficientBalanceError(
-                f"Insufficient balance: {float(user.balance)} < {float(amount)}"
+            logger.debug(
+                f"[{operation_id}] Данные пользователя: ID={user_id}, email={user.email},"
+                f" текущий баланс={float(user.balance)}"
             )
 
-        try:
+            if user.balance < amount:
+                logger.warning(
+                    f"[{operation_id}] Недостаточно средств у пользователя {user_id}:"
+                    f" баланс={float(user.balance)}, требуется={float(amount)}"
+                )
+                raise InsufficientBalanceError(
+                    f"Insufficient balance: {float(user.balance)} < {float(amount)}"
+                )
+
+            # Создание транзакции за предсказание
+            logger.debug(
+                f"[{operation_id}] Создание транзакции списания за предсказание:"
+                f" user_id={user_id}, task_id={task_id}, сумма={float(amount)}"
+            )
             transaction = await self.transaction_repository.create_charge_transaction(
                 user_id=user_id, amount=amount, task_id=task_id
             )
+            logger.debug(
+                f"[{operation_id}] Транзакция создана: ID={transaction.id}, статус={transaction.status.value}"
+            )
+
+            # Обновление баланса пользователя
+            logger.debug(
+                f"[{operation_id}] Обновление баланса пользователя: {float(user.balance)} -"
+                f" {float(amount)} = {float(user.balance - amount)}"
+            )
             updated_user = await self.user_repository.update_balance(user_id, -amount)
 
-            logger.success(f"Списание за предсказание завершено: {transaction}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Списание за предсказание завершено: transaction_id={transaction.id},"
+                f" user_id={user_id}, task_id={task_id}, amount={float(amount)},"
+                f" новый баланс={float(updated_user.balance)} | Время выполнения: {execution_time:.3f}с"
+            )
             return transaction, updated_user.balance
 
+        except InsufficientBalanceError:
+            # Пробрасываем ошибку недостаточного баланса выше
+            raise
         except Exception as e:
-            logger.exception("Ошибка при списании за предсказание")
+            execution_time = time.time() - start_time
+            logger.exception(
+                f"[{operation_id}] Ошибка при списании за предсказание: user_id={user_id},"
+                f" task_id={task_id}, сумма={float(amount)}: {str(e)} | Время выполнения: {execution_time:.3f}с"
+            )
             raise TransactionError(f"Error processing charge: {str(e)}")
 
     async def refund(
@@ -228,28 +375,68 @@ class BillingUseCase:
             ValueError: Если транзакция не найдена или неподходящего типа
             TransactionError: Ошибка при возврате
         """
-        logger.info(f"Инициирован возврат по транзакции {transaction_id}")
-        original_transaction = await self.transaction_repository.get_by_id(
-            transaction_id
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Запрос на возврат средств по транзакции {transaction_id}, причина: '{reason}'"
         )
-        if not original_transaction:
-            logger.error("Оригинальная транзакция не найдена")
-            raise ValueError(f"Transaction with ID {transaction_id} not found")
-
-        if original_transaction.type != TransactionType.CHARGE:
-            logger.error("Можно вернуть только списания")
-            raise ValueError("Only charge transactions can be refunded")
-
-        if not original_transaction.is_completed():
-            logger.error("Можно вернуть только завершённые транзакции")
-            raise ValueError("Only completed transactions can be refunded")
-
-        user_id = original_transaction.user_id
-        refund_amount = abs(original_transaction.amount)
 
         try:
+            # Получение оригинальной транзакции
+            original_transaction = await self.transaction_repository.get_by_id(
+                transaction_id
+            )
+            if not original_transaction:
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: транзакция с ID {transaction_id} не найдена"
+                )
+                raise ValueError(f"Transaction with ID {transaction_id} not found")
+
+            logger.debug(
+                f"[{operation_id}] Найдена транзакция: ID={transaction_id},"
+                f" тип={original_transaction.type.value}, статус={original_transaction.status.value},"
+                f" сумма={float(original_transaction.amount)}, user_id={original_transaction.user_id}"
+            )
+
+            # Проверка типа транзакции
+            if original_transaction.type != TransactionType.CHARGE:
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: возврат возможен только для транзакций списания,"
+                    f" текущий тип: {original_transaction.type.value}"
+                )
+                raise ValueError("Only charge transactions can be refunded")
+
+            # Проверка статуса транзакции
+            if not original_transaction.is_completed():
+                logger.error(
+                    f"[{operation_id}] Ошибка валидации: возврат возможен только для завершенных транзакций,"
+                    f" текущий статус: {original_transaction.status.value}"
+                )
+                raise ValueError("Only completed transactions can be refunded")
+
+            user_id = original_transaction.user_id
+            refund_amount = abs(original_transaction.amount)
+            logger.debug(
+                f"[{operation_id}] Подготовка возврата пользователю {user_id}, сумма возврата: {float(refund_amount)}"
+            )
+
+            # Получение текущего баланса пользователя
+            user = await self.user_repository.get_by_id(user_id)
+            if not user:
+                logger.error(
+                    f"[{operation_id}] Ошибка: пользователь {user_id} не найден"
+                )
+                raise ValueError(f"User with ID {user_id} not found")
+
+            logger.debug(
+                f"[{operation_id}] Данные пользователя: ID={user_id}, email={user.email},"
+                f" текущий баланс={float(user.balance)}"
+            )
+
+            # Создание транзакции возврата
+            refund_transaction_id = uuid4()
             refund_transaction = Transaction(
-                id=uuid4(),
+                id=refund_transaction_id,
                 user_id=user_id,
                 amount=refund_amount,
                 type=TransactionType.REFUND,
@@ -258,21 +445,45 @@ class BillingUseCase:
                 description=f"Возврат за транзакцию {transaction_id}: {reason}",
                 created_at=datetime.utcnow(),
             )
+            logger.debug(
+                f"[{operation_id}] Создание транзакции возврата: ID={refund_transaction_id}"
+            )
 
             created_transaction = await self.transaction_repository.create(
                 refund_transaction
             )
+            logger.debug(
+                f"[{operation_id}] Транзакция возврата создана: ID={created_transaction.id},"
+                f" статус={created_transaction.status.value}"
+            )
+
+            # Обновление баланса пользователя
+            logger.debug(
+                f"[{operation_id}] Обновление баланса пользователя: {float(user.balance)} +"
+                f" {float(refund_amount)} = {float(user.balance + refund_amount)}"
+            )
             updated_user = await self.user_repository.update_balance(
                 user_id, refund_amount
             )
+
+            # Завершение транзакции возврата
             completed_transaction = created_transaction.complete()
             await self.transaction_repository.update(completed_transaction)
 
-            logger.success(f"Возврат завершён: {completed_transaction}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Возврат средств завершен: refund_id={completed_transaction.id},"
+                f" original_id={transaction_id}, user_id={user_id}, amount={float(refund_amount)}, "
+                f"новый баланс={float(updated_user.balance)} | Время выполнения: {execution_time:.3f}с"
+            )
             return completed_transaction, updated_user.balance
 
         except Exception as e:
-            logger.exception("Ошибка при возврате средств")
+            execution_time = time.time() - start_time
+            logger.exception(
+                f"[{operation_id}] Ошибка при возврате средств по транзакции {transaction_id}: {str(e)}"
+                f" | Время выполнения: {execution_time:.3f}с"
+            )
             raise TransactionError(f"Error processing refund: {str(e)}")
 
     async def get_transactions(

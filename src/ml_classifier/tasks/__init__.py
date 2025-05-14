@@ -1,6 +1,5 @@
 """Task modules for asynchronous processing."""
 
-# Import all tasks so they're registered with Celery
 from ml_classifier.tasks.prediction_tasks import (
     execute_prediction,
     execute_batch_prediction,
@@ -14,7 +13,7 @@ from ml_classifier.tasks.maintenance_tasks import (
     generate_daily_report,
 )
 
-# Export the task functions for easier imports
+
 __all__ = [
     "execute_prediction",
     "execute_batch_prediction",

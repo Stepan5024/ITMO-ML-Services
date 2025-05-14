@@ -2,10 +2,11 @@
 import os
 import re
 import uuid
+import time
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import UploadFile
 import joblib
@@ -58,9 +59,18 @@ class ModelUseCase:
         Возвращает:
             Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, созданная модель)
         """
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Начало создания новой модели: '{model_data.get('name', 'Unnamed')}'"
+        )
+        logger.debug(f"[{operation_id}] Данные модели: {model_data}")
+
         existing_model = await self.model_repository.get_by_name(model_data["name"])
         if existing_model:
-            logger.warning(f"Модель с именем '{model_data['name']}' уже существует.")
+            logger.warning(
+                f"[{operation_id}] Модель с именем '{model_data['name']}' уже существует. ID: {existing_model.id}"
+            )
             return False, f"Модель с именем '{model_data['name']}' уже существует", None
 
         required_fields = [
@@ -72,18 +82,24 @@ class ModelUseCase:
         ]
         for field in required_fields:
             if field not in model_data:
-                logger.warning(f"Отсутствует обязательное поле: {field}")
+                logger.warning(
+                    f"[{operation_id}] Валидация не пройдена: отсутствует обязательное поле: {field}"
+                )
                 return False, f"Отсутствует обязательное поле: {field}", None
 
         try:
             model_type = ModelType(model_data["model_type"])
             algorithm = ModelAlgorithm(model_data["algorithm"])
+            logger.debug(
+                f"[{operation_id}] Тип модели: {model_type}, Алгоритм: {algorithm}"
+            )
         except ValueError as e:
-            logger.error(f"Неверное значение перечисления: {str(e)}")
+            logger.error(f"[{operation_id}] Неверное значение перечисления: {str(e)}")
             return False, f"Неверное значение перечисления: {str(e)}", None
 
+        model_id = uuid.uuid4()
         model = MLModel(
-            id=uuid.uuid4(),
+            id=model_id,
             name=model_data["name"],
             description=model_data.get("description"),
             model_type=model_type,
@@ -93,13 +109,25 @@ class ModelUseCase:
             is_active=model_data.get("is_active", True),
             price_per_call=Decimal(str(model_data.get("price_per_call", 0.0))),
         )
+        logger.debug(
+            f"[{operation_id}] Создание объекта модели: ID: {model_id}, Имя: {model.name}, Активность: "
+            f"{model.is_active}, Цена: {model.price_per_call}"
+        )
 
         try:
             created_model = await self.model_repository.create(model)
-            logger.info(f"Модель '{model.name}' успешно создана.")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Модель '{model.name}' успешно создана. ID: {created_model.id} | Время выполнения:"
+                f" {execution_time:.3f}с"
+            )
             return True, "Модель успешно создана", created_model
         except Exception as e:
-            logger.error(f"Ошибка при создании модели: {str(e)}")
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при создании модели '{model.name}': {str(e)} | Время выполнения: "
+                f"{execution_time:.3f}с"
+            )
             return False, f"Ошибка при создании модели: {str(e)}", None
 
     async def update_model(
@@ -115,16 +143,29 @@ class ModelUseCase:
         Возвращает:
             Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
         """
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос на обновление модели с ID {model_id}")
+        logger.debug(f"[{operation_id}] Данные для обновления: {model_data}")
+
         model = await self.model_repository.get_by_id(model_id)
         if not model:
-            logger.warning(f"Модель с ID {model_id} не найдена.")
+            logger.warning(f"[{operation_id}] Модель с ID {model_id} не найдена.")
             return False, f"Модель с ID {model_id} не найдена", None
 
+        logger.debug(
+            f"[{operation_id}] Найдена модель: ID: {model.id}, Имя: {model.name}, Тип: {model.model_type}, "
+            f"Алгоритм: {model.algorithm}"
+        )
+
         if "name" in model_data and model_data["name"] != model.name:
+            logger.debug(
+                f"[{operation_id}] Обнаружено изменение имени модели: '{model.name}' -> '{model_data['name']}'"
+            )
             existing = await self.model_repository.get_by_name(model_data["name"])
             if existing and existing.id != model_id:
                 logger.warning(
-                    f"Модель с именем '{model_data['name']}' уже существует."
+                    f"[{operation_id}] Модель с именем '{model_data['name']}' уже существует (ID: {existing.id})."
                 )
                 return (
                     False,
@@ -138,15 +179,21 @@ class ModelUseCase:
         if "model_type" in model_data:
             try:
                 model_type = ModelType(model_data["model_type"])
+                logger.debug(
+                    f"[{operation_id}] Изменение типа модели: {model.model_type} -> {model_type}"
+                )
             except ValueError as e:
-                logger.error(f"Неверный тип модели: {str(e)}")
+                logger.error(f"[{operation_id}] Неверный тип модели: {str(e)}")
                 return False, f"Неверный тип модели: {str(e)}", None
 
         if "algorithm" in model_data:
             try:
                 algorithm = ModelAlgorithm(model_data["algorithm"])
+                logger.debug(
+                    f"[{operation_id}] Изменение алгоритма модели: {model.algorithm} -> {algorithm}"
+                )
             except ValueError as e:
-                logger.error(f"Неверный алгоритм: {str(e)}")
+                logger.error(f"[{operation_id}] Неверный алгоритм: {str(e)}")
                 return False, f"Неверный алгоритм: {str(e)}", None
 
         updated_model = MLModel(
@@ -165,12 +212,25 @@ class ModelUseCase:
             updated_at=datetime.utcnow(),
         )
 
+        logger.debug(
+            f"[{operation_id}] Подготовлена обновленная модель. Имя: {updated_model.name}, Активность: "
+            f"{updated_model.is_active}, Цена: {updated_model.price_per_call}"
+        )
+
         try:
             updated = await self.model_repository.update(updated_model)
-            logger.info(f"Модель '{updated_model.name}' успешно обновлена.")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Модель '{updated_model.name}' успешно обновлена. ID: {updated.id} |"
+                f" Время выполнения: {execution_time:.3f}с"
+            )
             return True, "Модель успешно обновлена", updated
         except Exception as e:
-            logger.error(f"Ошибка при обновлении модели: {str(e)}")
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при обновлении модели '{updated_model.name}': {str(e)} | "
+                f"Время выполнения: {execution_time:.3f}с"
+            )
             return False, f"Ошибка при обновлении модели: {str(e)}", None
 
     async def delete_model(self, model_id: UUID) -> Tuple[bool, str]:
@@ -183,33 +243,68 @@ class ModelUseCase:
         Возвращает:
             Tuple[bool, str]: (успех, сообщение)
         """
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос на удаление модели с ID {model_id}")
+
         model = await self.model_repository.get_by_id(model_id)
         if not model:
-            logger.warning(f"Модель с ID {model_id} не найдена.")
+            logger.warning(f"[{operation_id}] Модель с ID {model_id} не найдена.")
             return False, f"Модель с ID {model_id} не найдена"
 
+        logger.debug(
+            f"[{operation_id}] Найдена модель: ID: {model.id}, Имя: {model.name}, Тип: {model.model_type}"
+        )
+
         versions = await self.version_repository.get_by_model_id(model_id)
+        logger.info(
+            f"[{operation_id}] Обнаружено {len(versions)} версий модели '{model.name}', которые будут удалены"
+        )
 
         for version in versions:
             try:
+                logger.debug(
+                    f"[{operation_id}] Удаление версии {version.id}, файл: {version.file_path}"
+                )
                 if os.path.exists(version.file_path):
                     os.remove(version.file_path)
+                    logger.debug(
+                        f"[{operation_id}] Файл модели удален: {version.file_path}"
+                    )
                 await self.version_repository.delete(version.id)
-                logger.info(f"Версия {version.id} модели {model.name} удалена.")
+                logger.info(
+                    f"[{operation_id}] Версия {version.id} модели {model.name} удалена из БД."
+                )
             except Exception as e:
-                logger.error(f"Ошибка при удалении версии {version.id}: {str(e)}")
+                logger.error(
+                    f"[{operation_id}] Ошибка при удалении версии {version.id}: {str(e)}"
+                )
                 return False, f"Ошибка при удалении версии {version.id}: {str(e)}"
 
         try:
+            logger.debug(f"[{operation_id}] Удаление данных модели из БД: {model_id}")
             success = await self.model_repository.delete(model_id)
+            execution_time = time.time() - start_time
+
             if success:
-                logger.info(f"Модель {model.name} и все её версии удалены.")
+                logger.success(
+                    f"[{operation_id}] Модель {model.name} (ID: {model_id}) и все её версии ({len(versions)}) удалены."
+                    f" | Время выполнения: {execution_time:.3f}с"
+                )
                 return True, "Модель и все её версии успешно удалены"
             else:
-                logger.warning(f"Не удалось удалить модель {model.name}.")
+                logger.warning(
+                    f"[{operation_id}] Не удалось удалить модель {model.name} (ID: {model_id}) | Время выполнения: "
+                    f"{execution_time:.3f}с"
+                )
                 return False, "Не удалось удалить модель"
+
         except Exception as e:
-            logger.error(f"Ошибка при удалении модели: {str(e)}")
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при удалении модели {model.name} (ID: {model_id}): {str(e)} "
+                f"| Время выполнения: {execution_time:.3f}с"
+            )
             return False, f"Ошибка при удалении модели: {str(e)}"
 
     async def get_model_by_id(self, model_id: UUID) -> Optional[MLModel]:
@@ -222,7 +317,32 @@ class ModelUseCase:
         Возвращает:
             Optional[MLModel]: Найденная модель или None
         """
-        return await self.model_repository.get_by_id(model_id)
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос модели по ID: {model_id}")
+
+        try:
+            model = await self.model_repository.get_by_id(model_id)
+            execution_time = time.time() - start_time
+
+            if model:
+                logger.debug(
+                    f"[{operation_id}] Модель найдена: ID: {model.id}, Имя: {model.name}, Тип: {model.model_type},"
+                    f" Активна: {model.is_active} | Время выполнения: {execution_time:.3f}с"
+                )
+            else:
+                logger.warning(
+                    f"[{operation_id}] Модель с ID {model_id} не найдена | Время выполнения: {execution_time:.3f}с"
+                )
+
+            return model
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при получении модели по ID {model_id}: {str(e)} | Время выполнения: "
+                f"{execution_time:.3f}с"
+            )
+            return None
 
     async def list_models(
         self,
@@ -245,19 +365,66 @@ class ModelUseCase:
         Возвращает:
             Tuple[List[MLModel], int]: Список моделей и общее количество
         """
-        if search:
-            models = await self.model_repository.search_models(
-                query=search, model_type=model_type, skip=skip, limit=limit
+        operation_id = str(uuid4())
+        start_time = time.time()
+
+        filters_info = {
+            "skip": skip,
+            "limit": limit,
+            "search": search,
+            "model_type": model_type.value if model_type else None,
+            "is_active": is_active,
+        }
+        logger.info(
+            f"[{operation_id}] Запрос списка моделей с фильтрами: {filters_info}"
+        )
+
+        try:
+            if search:
+                logger.debug(f"[{operation_id}] Поиск моделей по запросу: '{search}'")
+                models = await self.model_repository.search_models(
+                    query=search, model_type=model_type, skip=skip, limit=limit
+                )
+                total = len(models) + skip
+                logger.debug(
+                    f"[{operation_id}] Найдено моделей по поиску: {len(models)}"
+                )
+            else:
+                logger.debug(
+                    f"[{operation_id}] Получение списка всех моделей с пагинацией: skip={skip}, limit={limit}"
+                )
+                models = await self.model_repository.list(skip=skip, limit=limit)
+                total = await self.model_repository.count()
+                logger.debug(
+                    f"[{operation_id}] Получено моделей: {len(models)}, всего в БД: {total}"
+                )
+
+            # Применение фильтра по активности, если указан
+            if is_active is not None:
+                initial_count = len(models)
+                models = [model for model in models if model.is_active == is_active]
+                logger.debug(
+                    f"[{operation_id}] Фильтрация по активности (is_active={is_active}):"
+                    f" отфильтровано {initial_count - len(models)} моделей"
+                )
+
+            execution_time = time.time() - start_time
+            model_ids = [str(model.id) for model in models]
+            logger.success(
+                f"[{operation_id}] Успешно получен список моделей. Найдено: {len(models)} из {total} "
+                f"| Время выполнения: {execution_time:.3f}с"
             )
-            total = len(models) + skip
-        else:
-            models = await self.model_repository.list(skip=skip, limit=limit)
-            total = await self.model_repository.count()
+            logger.debug(f"[{operation_id}] IDs полученных моделей: {model_ids}")
 
-        if is_active is not None:
-            models = [model for model in models if model.is_active == is_active]
+            return models, total
 
-        return models, total
+        except Exception as e:
+            execution_time = time.time() - start_time
+            logger.error(
+                f"[{operation_id}] Ошибка при получении списка моделей: {str(e)} | Время выполнения: "
+                f"{execution_time:.3f}с"
+            )
+            return [], 0
 
     async def activate_model(
         self, model_id: UUID
@@ -271,21 +438,32 @@ class ModelUseCase:
         Returns:
             Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
         """
+        operation_id = str(uuid4())
+        logger.info(f"[{operation_id}] Запрос на активацию модели с ID {model_id}")
+
         try:
             model = await self.model_repository.get_by_id(model_id)
             if not model:
-                logger.error(f"Модель с ID {model_id} не найдена.")
+                logger.error(f"[{operation_id}] Модель с ID {model_id} не найдена.")
                 return False, f"Модель с ID {model_id} не найдена", None
 
+            logger.debug(
+                f"[{operation_id}] Найдена модель: ID: {model.id}, Имя: {model.name}, Активна: {model.is_active}"
+            )
+
             if model.is_active:
-                logger.info(f"Модель с ID {model_id} уже активна.")
+                logger.info(f"[{operation_id}] Модель с ID {model_id} уже активна.")
                 return True, "Модель уже активна", model
 
             updated = await self.model_repository.update_status(model_id, True)
-            logger.info(f"Модель с ID {model_id} успешно активирована.")
+            logger.info(
+                f"[{operation_id}] Модель с ID {model_id} успешно активирована."
+            )
             return True, "Модель успешно активирована", updated
         except Exception as e:
-            logger.exception(f"Ошибка при активации модели с ID {model_id}: {str(e)}")
+            logger.exception(
+                f"[{operation_id}] Ошибка при активации модели с ID {model_id}: {str(e)}"
+            )
             return False, f"Ошибка при активации модели: {str(e)}", None
 
     async def deactivate_model(
@@ -300,22 +478,29 @@ class ModelUseCase:
         Returns:
             Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
         """
+        operation_id = str(uuid4())
+        logger.info(f"[{operation_id}] Запрос на деактивацию модели с ID {model_id}")
+
         try:
             model = await self.model_repository.get_by_id(model_id)
             if not model:
-                logger.error(f"Модель с ID {model_id} не найдена.")
+                logger.error(f"[{operation_id}] Модель с ID {model_id} не найдена.")
                 return False, f"Модель с ID {model_id} не найдена", None
 
+            logger.debug(
+                f"[{operation_id}] Найдена модель: ID: {model.id}, Активна: {model.is_active}"
+            )
+
             if not model.is_active:
-                logger.info(f"Модель с ID {model_id} уже деактивирована.")
+                logger.info(f"[{operation_id}] Модель уже деактивирована.")
                 return True, "Модель уже деактивирована", model
 
             updated = await self.model_repository.update_status(model_id, False)
-            logger.info(f"Модель с ID {model_id} успешно деактивирована.")
+            logger.info(f"[{operation_id}] Модель успешно деактивирована.")
             return True, "Модель успешно деактивирована", updated
         except Exception as e:
-            logger.exception(f"Ошибка при деактивации модели с ID {model_id}: {str(e)}")
-            return False, f"Ошибка при деактивации модели: {str(e)}", None
+            logger.exception(f"[{operation_id}] Ошибка при деактивации: {str(e)}")
+            return False, f"Ошибка при деактивации: {str(e)}", None
 
 
 class ModelVersionUseCase:

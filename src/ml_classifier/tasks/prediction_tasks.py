@@ -37,7 +37,6 @@ async def _async_execute_prediction(
     start_time: float,
 ) -> Dict[str, Any]:
     async for db_session in get_db():
-        # Initialize repos and services
         user_repo = SQLAlchemyUserRepository(db_session)
         model_repo = SQLAlchemyMLModelRepository(db_session)
         version_repo = SQLAlchemyMLModelVersionRepository(db_session)
@@ -54,12 +53,10 @@ async def _async_execute_prediction(
             transaction_repository=transaction_repo,
         )
 
-        # Find the associated task if it exists
         task = None
         try:
-            task = await task_repo.get_by_celery_task_id(task_id)
+            task = await task_repo.get_by_id(UUID(task_id))
             if task:
-                # Update task status to PROCESSING
                 task.start_processing()
                 await task_repo.update(task)
                 logger.info(f"Task {task.id} status updated to PROCESSING")
@@ -67,7 +64,6 @@ async def _async_execute_prediction(
             logger.error(f"Error updating task status: {str(e)}")
 
         try:
-            # Execute the prediction
             result = await prediction_service.predict(
                 user_id=user_uuid,
                 model_id=model_uuid,
@@ -82,13 +78,11 @@ async def _async_execute_prediction(
                 f"execution_time={execution_time:.3f}s"
             )
 
-            # Update task status to COMPLETED with results
             if task:
                 task.complete(result)
                 await task_repo.update(task)
                 logger.info(f"Task {task.id} marked as COMPLETED")
 
-            # Update queue statistics if using task queue service
             task_queue_service = TaskQueueService(task_repo)
             if task and hasattr(task, "priority") and task.waiting_time() is not None:
                 task_queue_service.update_queue_stats(
@@ -104,7 +98,6 @@ async def _async_execute_prediction(
                 "status": "completed",
             }
         except Exception as e:
-            # Handle errors and update task status
             logger.error(f"Prediction error: {str(e)}")
 
             if task:
@@ -112,7 +105,6 @@ async def _async_execute_prediction(
                 await task_repo.update(task)
                 logger.info(f"Task {task.id} marked as FAILED: {str(e)}")
 
-            # Re-raise the exception for Celery's retry mechanism to handle
             raise
 
 
@@ -155,7 +147,6 @@ def execute_prediction(
             exc_info=True,
         )
 
-        # Don't retry certain expected errors
         if not any(
             error_type in str(e)
             for error_type in [
@@ -164,13 +155,11 @@ def execute_prediction(
                 "ValidationError",
             ]
         ):
-            # For unexpected errors, retry with exponential backoff
             retry_count = self.request.retries
             max_retries = 3
 
             if retry_count < max_retries:
-                # Calculate exponential backoff delay
-                backoff_delay = 2**retry_count * 30  # 30s, 60s, 120s...
+                backoff_delay = 2**retry_count * 30
                 logger.info(
                     f"Retrying task in {backoff_delay} seconds (retry {retry_count + 1}/{max_retries})"
                 )
@@ -178,10 +167,8 @@ def execute_prediction(
                     exc=e, countdown=backoff_delay, max_retries=max_retries
                 )
 
-        # For expected errors or after max retries, handle gracefully
         asyncio.run(update_failed_task(self.request.id, str(e)))
 
-        # Return a structured error response
         return {
             "status": "failed",
             "error": str(e),
@@ -218,14 +205,11 @@ async def _async_execute_batch_prediction(
             transaction_repository=transaction_repo,
         )
 
-        # Find and update task status
         task = None
         try:
             task = await task_repo.get_by_celery_task_id(task_id)
             if task:
-                # Update progress information in task
                 task.start_processing()
-                # Store batch size in task's output_data
                 if not task.output_data:
                     task.output_data = {}
                 task.output_data["batch_size"] = len(data_list)
@@ -235,18 +219,15 @@ async def _async_execute_batch_prediction(
             logger.error(f"Error updating batch task status: {str(e)}")
 
         try:
-            # For large batches, provide progress updates
             total_items = len(data_list)
             results = []
             error_count = 0
 
-            # Process items in smaller chunks to provide progress updates
             chunk_size = min(10, total_items)
             for i in range(0, total_items, chunk_size):
                 start_index = i
                 end_index = i + chunk_size
                 chunk = data_list[start_index:end_index]
-                # Process chunk
                 try:
                     chunk_result = await prediction_service.batch_predict(
                         user_id=user_uuid,
@@ -260,7 +241,6 @@ async def _async_execute_batch_prediction(
                     logger.error(
                         f"Error processing chunk {i // chunk_size + 1}: {str(e)}"
                     )
-                    # Add error placeholders for the failed chunk
                     error_results = [
                         {"error": str(e), "prediction": None, "confidence": 0}
                         for _ in chunk
@@ -268,12 +248,10 @@ async def _async_execute_batch_prediction(
                     results.extend(error_results)
                     error_count += len(chunk)
 
-                # Update progress
                 if task:
                     task.output_data["processed"] = i + len(chunk)
                     await task_repo.update(task)
 
-                    # Report progress to Celery
                     task_instance.update_state(
                         state="PROGRESS",
                         meta={
@@ -285,7 +263,6 @@ async def _async_execute_batch_prediction(
 
             execution_time = time.time() - start_time
 
-            # Compile final result
             final_result = {
                 "results": results,
                 "execution_time_ms": int(execution_time * 1000),
@@ -294,12 +271,10 @@ async def _async_execute_batch_prediction(
                 "error_count": error_count,
             }
 
-            # Update task as completed
             if task:
                 task.complete(final_result)
                 await task_repo.update(task)
 
-                # Update queue statistics
                 if hasattr(task, "priority") and task.waiting_time() is not None:
                     task_queue_service = TaskQueueService(task_repo)
                     task_queue_service.update_queue_stats(
@@ -321,12 +296,10 @@ async def _async_execute_batch_prediction(
         except Exception as e:
             logger.error(f"Batch prediction error: {str(e)}")
 
-            # Update task as failed
             if task:
                 task.fail(f"Batch processing failed: {str(e)}")
                 await task_repo.update(task)
 
-            # Re-raise for retry mechanism
             raise
 
 
@@ -370,7 +343,6 @@ def execute_batch_prediction(
             exc_info=True,
         )
 
-        # Handle specific known errors
         if not any(
             error_type in str(e)
             for error_type in [
@@ -379,9 +351,8 @@ def execute_batch_prediction(
                 "ValidationError",
             ]
         ):
-            # For unexpected errors, implement a retry mechanism with backoff
             retry_count = self.request.retries
-            max_retries = 2  # Lower for batch jobs since they're resource intensive
+            max_retries = 2
 
             if retry_count < max_retries:
                 backoff_delay = 60 * (retry_count + 1)  # 60s, 120s
@@ -393,7 +364,6 @@ def execute_batch_prediction(
                     exc=e, countdown=backoff_delay, max_retries=max_retries
                 )
 
-        # Update task as failed if at max retries or expected error
         asyncio.run(update_failed_task(self.request.id, str(e)))
 
         return {

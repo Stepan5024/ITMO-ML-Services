@@ -49,7 +49,6 @@ async def async_predict(
     Задача будет обработана в фоновом режиме, а результат можно будет получить по ID задачи.
     """
     try:
-        # Создаем задачу Celery для выполнения предсказания
         task = execute_prediction.delay(
             user_id=str(current_user.id),
             model_id=str(model_id),
@@ -85,10 +84,8 @@ async def async_batch_predict(
     Задача будет обработана в фоновом режиме, а результат можно будет получить по ID задачи.
     """
     try:
-        # Подготавливаем данные для пакетного предсказания
         data_list = [{"text": item.text} for item in input_data.items]
 
-        # Создаем задачу Celery для выполнения пакетного предсказания
         task = execute_batch_prediction.delay(
             user_id=str(current_user.id),
             model_id=str(model_id),

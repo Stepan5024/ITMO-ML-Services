@@ -7,6 +7,8 @@ from uuid import UUID
 from fastapi import Depends
 from passlib.context import CryptContext
 from loguru import logger
+import time
+from uuid import uuid4
 
 from ml_classifier.domain.entities.user import User
 from ml_classifier.domain.repositories.user_repository import UserRepository
@@ -51,20 +53,32 @@ class UserUseCase:
         :param is_admin: Флаг, указывающий на административные права
         :return: Кортеж (успех, сообщение, созданный пользователь)
         """
-        logger.info(f"Регистрация пользователя: {email}")
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Начало регистрации пользователя: {email} | Имя:"
+            f" {full_name or 'Не указано'} | Админ: {is_admin}"
+        )
 
         if not validate_email_format(email):
-            logger.warning(f"Неверный формат email: {email}")
+            logger.warning(
+                f"[{operation_id}] Валидация не пройдена: неверный формат email: {email}"
+            )
             return False, "Неверный формат email.", None
 
         valid_password, error_msg = validate_password_strength(password)
         if not valid_password:
-            logger.warning(f"Слабый пароль для пользователя {email}: {error_msg}")
+            logger.warning(
+                f"[{operation_id}] Валидация не пройдена: слабый пароль для пользователя {email}: {error_msg}"
+            )
             return False, error_msg, None
 
         existing_user = await self.user_repository.get_by_email(email)
         if existing_user:
-            logger.warning(f"Попытка повторной регистрации: {email}")
+            logger.warning(
+                f"[{operation_id}] Валидация не пройдена: пользователь с email"
+                f" {email} уже существует (ID: {existing_user.id})"
+            )
             return False, f"Email {email} уже зарегистрирован.", None
 
         user = User.create(
@@ -74,9 +88,22 @@ class UserUseCase:
             is_admin=is_admin,
         )
 
-        created_user = await self.user_repository.create(user)
-        logger.success(f"Пользователь успешно зарегистрирован: {email}")
-        return True, "Пользователь успешно зарегистрирован.", created_user
+        logger.debug(
+            f"[{operation_id}] Создание объекта пользователя: {email} | ID: {user.id}"
+        )
+        try:
+            created_user = await self.user_repository.create(user)
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Пользователь успешно зарегистрирован: {email} | ID: {created_user.id} "
+                f"| Время выполнения: {execution_time:.3f}с"
+            )
+            return True, "Пользователь успешно зарегистрирован.", created_user
+        except Exception as e:
+            logger.error(
+                f"[{operation_id}] Ошибка при создании пользователя {email}: {str(e)}"
+            )
+            return False, f"Ошибка при регистрации пользователя: {str(e)}", None
 
     async def authenticate_user(self, email: str, password: str) -> Optional[User]:
         """
@@ -86,18 +113,43 @@ class UserUseCase:
         :param password: Пароль в открытом виде
         :return: Пользователь, если аутентификация успешна, иначе None
         """
-        logger.info(f"Аутентификация пользователя: {email}")
-        user = await self.user_repository.get_by_email(email)
-        if not user:
-            logger.warning(f"Пользователь не найден: {email}")
-            return None
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Попытка аутентификации пользователя: {email}")
 
-        if not user.verify_password(password):
-            logger.warning(f"Неверный пароль для пользователя: {email}")
-            return None
+        try:
+            user = await self.user_repository.get_by_email(email)
 
-        logger.success(f"Аутентификация успешна: {email}")
-        return user
+            if not user:
+                logger.warning(
+                    f"[{operation_id}] Аутентификация не удалась: пользователь не найден: {email}"
+                )
+                return None
+
+            logger.debug(
+                f"[{operation_id}] Пользователь найден: {email} | ID: {user.id} | Активен: {user.is_active} "
+                f"| Админ: {user.is_admin}"
+            )
+
+            if not user.verify_password(password):
+                logger.warning(
+                    f"[{operation_id}] Аутентификация не удалась: неверный пароль для пользователя: "
+                    f"{email} | ID: {user.id}"
+                )
+                return None
+
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Аутентификация успешна: {email} | ID: {user.id} | Время выполнения: "
+                f"{execution_time:.3f}с"
+            )
+            return user
+
+        except Exception as e:
+            logger.error(
+                f"[{operation_id}] Ошибка при аутентификации пользователя {email}: {str(e)}"
+            )
+            return None
 
     async def get_user_by_id(self, user_id: UUID) -> Optional[User]:
         """
@@ -106,8 +158,30 @@ class UserUseCase:
         :param user_id: Идентификатор пользователя
         :return: Пользователь или None, если не найден
         """
-        logger.info(f"Получение пользователя по ID: {user_id}")
-        return await self.user_repository.get_by_id(user_id)
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос пользователя по ID: {user_id}")
+
+        try:
+            user = await self.user_repository.get_by_id(user_id)
+            execution_time = time.time() - start_time
+
+            if user:
+                logger.debug(
+                    f"[{operation_id}] Пользователь найден: ID {user_id} | Email: {user.email} | Активен: "
+                    f"{user.is_active} | Время выполнения: {execution_time:.3f}с"
+                )
+            else:
+                logger.warning(
+                    f"[{operation_id}] Пользователь не найден: ID {user_id} | Время выполнения: {execution_time:.3f}с"
+                )
+
+            return user
+        except Exception as e:
+            logger.error(
+                f"[{operation_id}] Ошибка при получении пользователя по ID {user_id}: {str(e)}"
+            )
+            return None
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """
@@ -116,8 +190,30 @@ class UserUseCase:
         :param email: Электронная почта пользователя
         :return: Пользователь или None, если не найден
         """
-        logger.info(f"Получение пользователя по email: {email}")
-        return await self.user_repository.get_by_email(email)
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(f"[{operation_id}] Запрос пользователя по email: {email}")
+
+        try:
+            user = await self.user_repository.get_by_email(email)
+            execution_time = time.time() - start_time
+
+            if user:
+                logger.debug(
+                    f"[{operation_id}] Пользователь найден: Email {email} | ID: {user.id} | Активен:"
+                    f" {user.is_active} | Время выполнения: {execution_time:.3f}с"
+                )
+            else:
+                logger.warning(
+                    f"[{operation_id}] Пользователь не найден: Email {email} | Время выполнения: {execution_time:.3f}с"
+                )
+
+            return user
+        except Exception as e:
+            logger.error(
+                f"[{operation_id}] Ошибка при получении пользователя по email {email}: {str(e)}"
+            )
+            return None
 
     async def update_user(
         self, user_id: UUID, full_name: Optional[str] = None
@@ -129,11 +225,23 @@ class UserUseCase:
         :param full_name: Новое полное имя (если есть)
         :return: Кортеж (успех, сообщение, обновлённый пользователь)
         """
-        logger.info(f"Обновление пользователя ID: {user_id}")
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Запрос на обновление пользователя ID: {user_id} | Новое имя: {full_name}"
+        )
+
         user = await self.get_user_by_id(user_id)
         if not user:
-            logger.warning(f"Пользователь не найден при обновлении: {user_id}")
+            logger.warning(
+                f"[{operation_id}] Обновление не выполнено: пользователь не найден: {user_id}"
+            )
             return False, f"Пользователь с ID {user_id} не найден.", None
+
+        logger.debug(
+            f"[{operation_id}] Текущие данные пользователя: ID: {user.id} | Email: {user.email} | Имя: "
+            f"{user.full_name} | Активен: {user.is_active} | Админ: {user.is_admin}"
+        )
 
         if full_name is not None:
             user = User(
@@ -147,13 +255,22 @@ class UserUseCase:
                 created_at=user.created_at,
                 updated_at=user.updated_at,
             )
+            logger.debug(
+                f"[{operation_id}] Подготовлено обновление имени пользователя: {user.full_name} -> {full_name}"
+            )
 
         try:
             updated_user = await self.user_repository.update(user)
-            logger.success(f"Пользователь успешно обновлён: {user_id}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Пользователь успешно обновлён: ID: {user_id} | Email: {user.email} | Новое имя: "
+                f"{updated_user.full_name} | Время выполнения: {execution_time:.3f}с"
+            )
             return True, "Пользователь успешно обновлён.", updated_user
         except Exception as e:
-            logger.exception(f"Ошибка при обновлении пользователя {user_id}: {str(e)}")
+            logger.exception(
+                f"[{operation_id}] Ошибка при обновлении пользователя {user_id}: {str(e)}"
+            )
             return False, f"Не удалось обновить пользователя: {str(e)}", None
 
     async def change_password(
@@ -167,21 +284,41 @@ class UserUseCase:
         :param new_password: Новый пароль
         :return: Кортеж (успех, сообщение)
         """
-        logger.info(f"Попытка смены пароля для пользователя: {user_id}")
+        operation_id = str(uuid4())
+        start_time = time.time()
+        logger.info(
+            f"[{operation_id}] Запрос на смену пароля для пользователя: {user_id}"
+        )
+
         user = await self.get_user_by_id(user_id)
         if not user:
-            logger.warning(f"Пользователь не найден при смене пароля: {user_id}")
+            logger.warning(
+                f"[{operation_id}] Смена пароля не выполнена: пользователь не найден: {user_id}"
+            )
             return False, f"Пользователь с ID {user_id} не найден."
 
+        logger.debug(
+            f"[{operation_id}] Пользователь найден: ID: {user.id} | Email: {user.email}"
+        )
+
         if not user.verify_password(current_password):
-            logger.warning(f"Неверный текущий пароль для пользователя: {user.email}")
+            logger.warning(
+                f"[{operation_id}] Смена пароля не выполнена: неверный текущий пароль для пользователя: "
+                f"{user.email} | ID: {user.id}"
+            )
             return False, "Неверный текущий пароль."
 
         valid_password, error_msg = validate_password_strength(new_password)
         if not valid_password:
-            logger.warning(f"Слабый новый пароль для пользователя: {user.email}")
+            logger.warning(
+                f"[{operation_id}] Смена пароля не выполнена: слабый новый пароль для пользователя: "
+                f"{user.email} | ID: {user.id} | Причина: {error_msg}"
+            )
             return False, error_msg
 
+        logger.debug(
+            f"[{operation_id}] Валидация нового пароля пройдена, хеширование пароля для пользователя: {user.email}"
+        )
         hashed_password = pwd_context.hash(new_password)
 
         updated_user = User(
@@ -198,11 +335,15 @@ class UserUseCase:
 
         try:
             await self.user_repository.update(updated_user)
-            logger.success(f"Пароль успешно изменён для пользователя: {user.email}")
+            execution_time = time.time() - start_time
+            logger.success(
+                f"[{operation_id}] Пароль успешно изменён для пользователя: "
+                f"{user.email} | ID: {user.id} | Время выполнения: {execution_time:.3f}с"
+            )
             return True, "Пароль успешно обновлён."
         except Exception as e:
             logger.exception(
-                f"Ошибка при смене пароля для пользователя {user.email}: {str(e)}"
+                f"[{operation_id}] Ошибка при смене пароля для пользователя {user.email} | ID: {user.id}: {str(e)}"
             )
             return False, f"Не удалось обновить пароль: {str(e)}"
 
@@ -214,6 +355,7 @@ async def get_user_repository(session=Depends(get_db)) -> UserRepository:
     :param session: Сессия БД
     :return: Репозиторий пользователей
     """
+    logger.debug("Создание экземпляра SQLAlchemyUserRepository")
     return SQLAlchemyUserRepository(session)
 
 
@@ -226,4 +368,5 @@ def get_user_use_case(
     :param user_repo: Репозиторий пользователей
     :return: Экземпляр бизнес-логики пользователя
     """
+    logger.debug("Создание экземпляра UserUseCase с репозиторием пользователей")
     return UserUseCase(user_repo)

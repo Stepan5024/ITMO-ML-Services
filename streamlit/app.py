@@ -48,6 +48,12 @@ pages = {
 for page_name, page_path in pages.items():
     st.sidebar.page_link(page_path, label=page_name)
 
+# Admin section - only show if user is an admin
+if user_info.get("is_admin", False):
+    st.sidebar.divider()
+    st.sidebar.subheader("Administration")
+    st.sidebar.page_link("pages/admin.py", label="Admin Dashboard", icon="🔧")
+
 if st.sidebar.button("Logout"):
     logger.info("Пользователь нажал кнопку выхода")
     logout()

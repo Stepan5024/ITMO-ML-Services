@@ -126,6 +126,7 @@ async def predict(
     ),
     current_user: User = Depends(get_current_active_user),
     prediction_service: PredictionService = Depends(get_prediction_service),
+    model_repository: MLModelRepository = Depends(get_model_repository),
 ):
     """
     Make a prediction using the specified model.
@@ -133,6 +134,24 @@ async def predict(
     This endpoint charges the user based on the model's price_per_call.
     """
     logger.info(f"Received request for model_id: {model_id}")
+
+    # Verify that the model exists in the database
+    model = await model_repository.get_by_id(model_id)
+    if not model:
+        logger.error(f"Model with ID {model_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model with ID {model_id} not found",
+        )
+
+    # Check if the model is active
+    if not model.is_active:
+        logger.error(f"Model with ID {model_id} is not active")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model with ID {model_id} is not active",
+        )
+
     try:
         result = await prediction_service.predict(
             user_id=current_user.id,
@@ -168,12 +187,30 @@ async def batch_predict(
     ),
     current_user: User = Depends(get_current_active_user),
     prediction_service: PredictionService = Depends(get_prediction_service),
+    model_repository: MLModelRepository = Depends(get_model_repository),
 ):
     """
     Make batch predictions using the specified model.
 
     This endpoint charges the user based on the model's price_per_call multiplied by the batch size.
     """
+    # Verify that the model exists in the database
+    model = await model_repository.get_by_id(model_id)
+    if not model:
+        logger.error(f"Model with ID {model_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model with ID {model_id} not found",
+        )
+
+    # Check if the model is active
+    if not model.is_active:
+        logger.error(f"Model with ID {model_id} is not active")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model with ID {model_id} is not active",
+        )
+
     try:
         data_list = [{"text": item.text} for item in input_data.items]
 
@@ -210,12 +247,22 @@ async def sandbox_predict(
     ),
     current_user: User = Depends(get_current_active_user),
     prediction_service: PredictionService = Depends(get_prediction_service),
+    model_repository: MLModelRepository = Depends(get_model_repository),
 ):
     """
     Make a test prediction using the specified model.
 
     This sandbox endpoint does not charge the user.
     """
+    # Verify that the model exists in the database
+    model = await model_repository.get_by_id(model_id)
+    if not model:
+        logger.error(f"Model with ID {model_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model with ID {model_id} not found",
+        )
+
     try:
         result = await prediction_service.predict(
             user_id=current_user.id,
@@ -227,12 +274,14 @@ async def sandbox_predict(
         return result
 
     except ModelNotFoundError:
+        logger.error(f"Model with ID {model_id} not found")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Model with ID {model_id} not found",
         )
 
     except PredictionError as e:
+        logger.error(f"Error during prediction: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
@@ -254,6 +303,14 @@ async def list_models(
             models = await model_repository.get_active_models()
             total = len(models)
 
+        # Check if there are any models to return
+        if not models:
+            logger.warning("No active models found in the database")
+            return ModelListResponse(
+                items=[],
+                total=0,
+            )
+
         return ModelListResponse(
             items=[
                 ModelInfo(
@@ -271,6 +328,7 @@ async def list_models(
         )
 
     except Exception as e:
+        logger.error(f"Error retrieving models: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error retrieving models: {str(e)}",

@@ -98,6 +98,7 @@ async def get_task_use_case(
         400: {"description": "Ошибка в запросе"},
         401: {"description": "Ошибка аутентификации"},
         402: {"description": "Недостаточно средств на счете"},
+        404: {"description": "Модель не найдена"},
         500: {"description": "Внутренняя ошибка сервера"},
     },
 )
@@ -114,6 +115,7 @@ async def classify_text(
     ),
     current_user: User = Depends(get_current_active_user),
     task_use_case: TaskUseCase = Depends(get_task_use_case),
+    db_session=Depends(get_db),
 ):
     """
     Классифицирует текст отзыва с использованием моделей машинного обучения.
@@ -135,16 +137,84 @@ async def classify_text(
     - Результат классификации или информацию об асинхронной задаче
     """
     if not request.async_execution and len(request.text) <= 1000:
-        from ml_classifier.controller.prediction_controller import predict
+        try:
+            # Создаем сервисы напрямую вместо вызова другого контроллера
+            from ml_classifier.infrastructure.db.repositories.ml_model_repository import (
+                SQLAlchemyMLModelRepository,
+            )
+            from ml_classifier.infrastructure.db.repositories.ml_model_version_repository import (
+                SQLAlchemyMLModelVersionRepository,
+            )
+            from ml_classifier.infrastructure.db.repositories.user_repository import (
+                SQLAlchemyUserRepository,
+            )
+            from ml_classifier.infrastructure.db.repositories.task_repository import (
+                SQLAlchemyTaskRepository,
+            )
+            from ml_classifier.infrastructure.db.repositories.transaction_repository import (
+                SQLAlchemyTransactionRepository,
+            )
+            from ml_classifier.infrastructure.ml.model_loader import ModelLoader
+            from ml_classifier.infrastructure.ml.prediction_service import (
+                PredictionService,
+            )
 
-        return await predict(
-            model_id=request.model_id,
-            input_data={"text": request.text},
-            version_id=request.version_id,
-            current_user=current_user,
-        )
+            # Инициализируем репозитории
+            model_repo = SQLAlchemyMLModelRepository(db_session)
+            version_repo = SQLAlchemyMLModelVersionRepository(db_session)
+            user_repo = SQLAlchemyUserRepository(db_session)
+            task_repo = SQLAlchemyTaskRepository(db_session)
+            transaction_repo = SQLAlchemyTransactionRepository(db_session)
 
-    # For async execution, create a task
+            # Проверяем наличие моделей в БД
+            if request.model_id:
+                model = await model_repo.get_by_id(request.model_id)
+                if not model:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Model with ID {request.model_id} not found",
+                    )
+            else:
+                # Если модель не указана, проверяем есть ли активные модели
+                active_models = await model_repo.get_active_models()
+                if not active_models:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="No active models found in the database",
+                    )
+
+            # Инициализируем сервисы
+            model_loader = ModelLoader(
+                model_repository=model_repo,
+                model_version_repository=version_repo,
+                model_storage_path="models",
+            )
+            prediction_service = PredictionService(
+                model_loader=model_loader,
+                model_repository=model_repo,
+                user_repository=user_repo,
+                task_repository=task_repo,
+                transaction_repository=transaction_repo,
+            )
+
+            # Выполняем предсказание
+            result = await prediction_service.predict(
+                user_id=current_user.id,
+                model_id=request.model_id,
+                data={"text": request.text},
+                version_id=request.version_id,
+                sandbox=False,
+            )
+            return result
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error during prediction: {str(e)}",
+            )
+
     success, message, task = await task_use_case.create_task(
         user_id=current_user.id,
         model_id=request.model_id,
@@ -156,7 +226,6 @@ async def classify_text(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
-    # Return task info with location header for result retrieval
     wait_time = task_use_case.task_queue_service.estimate_waiting_time(request.priority)
 
     response = AsyncTaskResponse(
@@ -181,7 +250,6 @@ async def classify_batch(
 
     This endpoint always creates an asynchronous task.
     """
-    # Prepare input data for batch processing
     input_data = {"texts": request.texts, "batch_size": len(request.texts)}
 
     success, message, task = await task_use_case.create_task(
@@ -195,9 +263,8 @@ async def classify_batch(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
-    # Estimate completion time based on queue size and batch size
     wait_time = task_use_case.task_queue_service.estimate_waiting_time(request.priority)
-    wait_time_sec = wait_time * len(request.texts) / 10  # Adjust for batch size
+    wait_time_sec = wait_time * len(request.texts) / 10
 
     from datetime import datetime, timedelta
 

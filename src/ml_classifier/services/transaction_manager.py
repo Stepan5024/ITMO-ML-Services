@@ -84,15 +84,12 @@ class TransactionManager:
             ValueError: On validation errors
             RuntimeError: If user is already locked
         """
-        # Check if user is already locked
         if user_id in self._locked_user_ids:
             raise RuntimeError(f"User {user_id} is already locked for a transaction")
 
         try:
-            # Lock user
             self._locked_user_ids.add(user_id)
 
-            # Get user and check balance if needed
             user = await self.user_repository.get_by_id(user_id)
             if not user:
                 raise ValueError(f"User with ID {user_id} not found")
@@ -102,7 +99,6 @@ class TransactionManager:
                     f"Insufficient balance: {float(user.balance)} < {float(abs(amount))}"
                 )
 
-            # Create pending transaction
             transaction = Transaction(
                 user_id=user_id,
                 amount=amount,
@@ -114,13 +110,11 @@ class TransactionManager:
                 created_at=datetime.utcnow(),
             )
 
-            # Save transaction
             created_transaction = await self.transaction_repository.create(transaction)
 
             return created_transaction
 
         finally:
-            # Always unlock user
             if user_id in self._locked_user_ids:
                 self._locked_user_ids.remove(user_id)
 
@@ -147,7 +141,6 @@ class TransactionManager:
         user_id = transaction.user_id
 
         try:
-            # Lock user
             if user_id in self._locked_user_ids:
                 raise RuntimeError(
                     f"User {user_id} is already locked for a transaction"
@@ -155,17 +148,14 @@ class TransactionManager:
 
             self._locked_user_ids.add(user_id)
 
-            # Update user balance
             await self.user_repository.update_balance(user_id, transaction.amount)
 
-            # Mark transaction as completed
             transaction.complete()
             updated_transaction = await self.transaction_repository.update(transaction)
 
             return updated_transaction
 
         finally:
-            # Always unlock user
             if user_id in self._locked_user_ids:
                 self._locked_user_ids.remove(user_id)
 
@@ -195,7 +185,6 @@ class TransactionManager:
         user_id = transaction.user_id
 
         try:
-            # Lock user to prevent concurrent operations
             if user_id in self._locked_user_ids:
                 raise RuntimeError(
                     f"User {user_id} is already locked for a transaction"
@@ -203,14 +192,12 @@ class TransactionManager:
 
             self._locked_user_ids.add(user_id)
 
-            # Mark transaction as failed
             transaction.fail(reason)
             updated_transaction = await self.transaction_repository.update(transaction)
 
             return updated_transaction
 
         finally:
-            # Always unlock user
             if user_id in self._locked_user_ids:
                 self._locked_user_ids.remove(user_id)
 
@@ -225,7 +212,6 @@ class TransactionManager:
             minutes=self.pending_timeout_minutes
         )
 
-        # Find all pending transactions older than cutoff time
         stale_transactions = await self._find_stale_pending_transactions(cutoff_time)
         count = 0
 
@@ -237,7 +223,6 @@ class TransactionManager:
                 )
                 count += 1
             except Exception as e:
-                # Log error but continue with other transactions
                 print(f"Error rolling back transaction {transaction.id}: {str(e)}")
 
         return count
@@ -254,6 +239,4 @@ class TransactionManager:
         Returns:
             List[Transaction]: List of stale transactions
         """
-        # This is a placeholder. The actual implementation would depend on the repository API
-        # and would require a method to query transactions by status and creation time
         return []

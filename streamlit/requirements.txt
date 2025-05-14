@@ -3,3 +3,4 @@ requests==2.31.0
 pandas==2.1.0
 loguru==0.7.0
 requests
+plotly==5.18.0

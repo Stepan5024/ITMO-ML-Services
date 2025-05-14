@@ -43,7 +43,6 @@ async def request_transaction_report(
     и результат можно будет получить по ID задачи.
     """
     try:
-        # Запускаем асинхронную задачу генерации отчета
         task = generate_transaction_report.delay(
             user_id=str(current_user.id),
             start_date=report_request.start_date.isoformat(),
@@ -75,7 +74,6 @@ async def request_usage_report(
     и результат можно будет получить по ID задачи.
     """
     try:
-        # Запускаем асинхронную задачу генерации отчета
         task = generate_usage_report.delay(
             user_id=str(current_user.id),
             start_date=report_request.start_date.isoformat(),
