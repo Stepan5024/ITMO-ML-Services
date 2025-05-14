@@ -33,32 +33,20 @@ class TaskMonitorService:
             ValueError: Если задача не найдена
             PermissionError: Если пользователь не имеет доступа к задаче
         """
-        # Получаем информацию о задаче из Celery
         result = AsyncResult(task_id, app=celery_app)
 
-        # Проверяем доступ пользователя к задаче, если указан user_id
-        if user_id and self.task_repository:
-            # Здесь должна быть проверка прав доступа, но у нас нет такой модели данных
-            # Для примера предполагаем, что пользователь всегда имеет доступ
-            pass
-
-        # Формируем ответ
         response = {
             "task_id": task_id,
             "status": result.status,
             "state": result.state,
         }
 
-        # Добавляем информацию о результате, если задача завершена
         if result.ready():
             if result.successful():
-                # Могут быть большие результаты, ограничиваем размер
                 raw_result = result.result
                 if isinstance(raw_result, dict):
-                    # Копируем словарь, чтобы не изменять оригинал
                     safe_result = raw_result.copy()
 
-                    # Ограничиваем большие поля
                     for key, value in safe_result.items():
                         if isinstance(value, str) and len(value) > 1000:
                             safe_result[key] = value[:500] + "... [truncated]"
@@ -69,10 +57,8 @@ class TaskMonitorService:
                         str_result = str_result[:500] + "... [truncated]"
                     response["result"] = str_result
             else:
-                # Если задача не успешна, добавляем информацию об ошибке
                 response["error"] = str(result.result)
 
-        # Добавляем прогресс выполнения, если доступен
         if hasattr(result, "info") and result.info:
             if isinstance(result.info, dict) and "progress" in result.info:
                 response["progress"] = result.info["progress"]
@@ -91,7 +77,6 @@ class TaskMonitorService:
         Получает список задач пользователя с возможностью фильтрации.
         """
         logger.info(f"Getting user tasks for user {user_id}")
-        # Получаем задачи в зависимости от роли пользователя
         if is_admin:
             tasks = await self.task_repository.list(skip=(page - 1) * size, limit=size)
             total_count = await self.task_repository.count()
@@ -99,22 +84,18 @@ class TaskMonitorService:
             tasks = await self.task_repository.get_by_user_id(user_id)
             total_count = len(tasks)
 
-        # Фильтруем по статусу, если указан
         if status:
             try:
                 status_enum = TaskStatus(status.upper())
                 tasks = [task for task in tasks if task.status == status_enum]
             except ValueError:
-                # В случае неправильного статуса просто игнорируем фильтр
                 logger.warning(f"Invalid status filter: {status}")
 
-        # Применяем пагинацию для обычного пользователя здесь, для админа уже применена выше
         if not is_admin:
             start_idx = (page - 1) * size
             end_idx = start_idx + size
             tasks = tasks[start_idx:end_idx]
 
-        # Преобразуем в формат ответа
         task_list = []
         for task in tasks:
             task_info = {
@@ -128,16 +109,13 @@ class TaskMonitorService:
                 "duration": task.duration() if task.completed_at else None,
             }
 
-            # Добавляем результаты, если есть
             if task.output_data:
-                # Ограничиваем размер вывода
                 output_str = json.dumps(task.output_data)
                 if len(output_str) > 1000:
                     task_info["output_summary"] = output_str[:500] + "... [truncated]"
                 else:
                     task_info["output_data"] = task.output_data
 
-            # Добавляем сообщение об ошибке, если есть
             if task.error_message:
                 task_info["error_message"] = task.error_message
 
@@ -162,12 +140,7 @@ class TaskMonitorService:
             ValueError: Если задача не найдена
             PermissionError: Если пользователь не имеет доступа к задаче
         """
-        # Проверяем доступ пользователя к задаче, если указан user_id
-        if user_id and self.task_repository:
-            # Здесь должна быть проверка прав доступа
-            pass
 
-        # Отменяем задачу в Celery
         celery_app.control.revoke(task_id, terminate=True)
 
         logger.info(f"Task {task_id} revoked by user {user_id}")
@@ -195,17 +168,12 @@ class TaskMonitorService:
             ValueError: Если задача не найдена
             PermissionError: Если пользователь не имеет доступа к задаче
         """
-        # Получаем информацию о задаче
         result = AsyncResult(task_id, app=celery_app)
 
         if not result.failed():
             raise ValueError(
                 f"Only failed tasks can be retried. Task {task_id} status: {result.status}"
             )
-
-        # Получаем информацию о задаче для повторения
-        # В реальном приложении вам нужно получить аргументы задачи из БД
-        # Для простоты предположим, что мы не можем повторить произвольную задачу
 
         logger.warning(
             f"Task retry functionality is not fully implemented for task {task_id}"

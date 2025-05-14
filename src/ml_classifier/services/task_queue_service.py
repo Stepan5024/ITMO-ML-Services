@@ -98,7 +98,6 @@ class TaskQueueService:
                 f"User has too many pending tasks ({user_pending_tasks}/{self.user_task_limit})"
             )
 
-        # Check queue size limits
         current_queue_size = self.queue_stats[priority]["current_size"]
         max_size = self.max_queue_size[priority]
         logger.debug(
@@ -118,27 +117,23 @@ class TaskQueueService:
             logger.debug(
                 f"[{operation_id}] Требуется резервирование средств (не в режиме песочницы)"
             )
-            # Logic for reserving funds would go here
             pass
         else:
             logger.debug(
                 f"[{operation_id}] Резервирование средств не требуется (режим песочницы или биллинг отключен)"
             )
 
-        # Select task function based on batch mode
         task_func = execute_batch_prediction if batch_mode else execute_prediction
         logger.debug(
             f"[{operation_id}] Выбрана функция обработки задачи: {'batch' if batch_mode else 'single'} prediction"
         )
 
-        # Set queue name and priority level
         queue_name = f"ml_{priority}"
         priority_value = {"low": 1, "normal": 5, "high": 9}[priority]
         logger.debug(
             f"[{operation_id}] Параметры очереди: имя='{queue_name}', приоритет={priority_value}"
         )
 
-        # Submit to Celery
         logger.debug(f"[{operation_id}] Отправка задачи в Celery: task_id={task_id}")
         try:
             celery_task = task_func.apply_async(
@@ -155,7 +150,6 @@ class TaskQueueService:
                 task_id=str(task_id),
             )
 
-            # Update queue statistics
             self.queue_stats[priority]["current_size"] += 1
             logger.debug(
                 f"[{operation_id}] Размер очереди '{priority}' увеличен до {self.queue_stats[priority]['current_size']}"
@@ -238,7 +232,6 @@ class TaskQueueService:
         base_time = queue_info["avg_wait_time"]
         queue_size = queue_info["current_size"]
 
-        # Simple formula considering queue size impact
         estimated_time = int(base_time * (1 + queue_size / 10))
 
         logger.debug(
@@ -261,7 +254,6 @@ class TaskQueueService:
             )
             return
 
-        # Update average wait time with exponential moving average
         stats = self.queue_stats[priority]
         old_avg = stats["avg_wait_time"]
         new_avg = old_avg * 0.9 + wait_time * 0.1

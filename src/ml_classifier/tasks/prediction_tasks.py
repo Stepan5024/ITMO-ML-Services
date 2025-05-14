@@ -106,6 +106,7 @@ async def _async_execute_prediction(
                 logger.info(f"Task {task.id} marked as FAILED: {str(e)}")
 
             raise
+    return None
 
 
 @shared_task(bind=True, name="ml_classifier.tasks.execute_prediction")

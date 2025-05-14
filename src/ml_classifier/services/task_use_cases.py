@@ -73,14 +73,12 @@ class TaskUseCase:
             f"[{operation_id}] Найдена модель: {model.name}, тип: {model.model_type}, активна: {model.is_active}"
         )
 
-        # Validate model is active
         if not model.is_active:
             logger.warning(
                 f"[{operation_id}] Модель {model.name} неактивна, создание задачи невозможно"
             )
             return False, f"Model {model.name} is inactive", None
 
-        # Check balance if not sandbox mode
         if not sandbox and self.billing_use_case:
             logger.debug(f"[{operation_id}] Проверка баланса пользователя: {user_id}")
             balance = await self.billing_use_case.get_balance(user_id)
@@ -94,7 +92,6 @@ class TaskUseCase:
                 f"[{operation_id}] Баланс достаточен: {float(balance)} > {float(model.price_per_call)}"
             )
 
-        # Create task entity
         task_id = uuid4()
         logger.debug(f"[{operation_id}] Создание сущности задачи с ID: {task_id}")
         task = Task(
@@ -108,12 +105,10 @@ class TaskUseCase:
             created_at=datetime.utcnow(),
         )
 
-        # Save task to repository
         logger.debug(f"[{operation_id}] Сохранение задачи в репозиторий: {task_id}")
         created_task = await self.task_repository.create(task)
 
         try:
-            # Enqueue task
             logger.debug(
                 f"[{operation_id}] Постановка задачи {task_id} в очередь: priority={priority}"
             )
@@ -200,7 +195,6 @@ class TaskUseCase:
             f"status={task.status.value}, приоритет={task.priority}"
         )
 
-        # Check permissions (user must own the task or be an admin)
         if task.user_id != user_id and not allow_admin:
             execution_time = time.time() - start_time
             logger.warning(
@@ -490,7 +484,6 @@ class TaskUseCase:
             f" model_id={original_task.model_id}, priority={original_task.priority}"
         )
 
-        # Create new task with same parameters
         success, message, new_task = await self.create_task(
             user_id=user_id,
             model_id=original_task.model_id,
