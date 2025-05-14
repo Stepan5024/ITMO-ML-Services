@@ -112,6 +112,20 @@ services:
       - ml-network
     restart: unless-stopped
 
+  streamlit:
+    build: ./streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://app:8000
+    volumes:
+      - ./streamlit:/app
+    depends_on:
+      - app
+    networks:
+      - ml-network
+    restart: unless-stopped
+
 
 networks:
   ml-network:

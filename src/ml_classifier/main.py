@@ -31,7 +31,9 @@ from ml_classifier.controller.billing_controller import router as billing_router
 from ml_classifier.controller.task_controller import router as task_router
 from ml_classifier.controller.async_controller import router as async_router
 from ml_classifier.controller.report_controller import router as report_router
-
+from ml_classifier.controller.classification_controller import (
+    router as classification_router,
+)
 
 setup_logging()
 
@@ -88,26 +90,54 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def custom_openapi() -> Dict[str, Any]:
-    """Generate custom OpenAPI schema."""
+    """Генерирует расширенную схему OpenAPI с поддержкой русского языка."""
     from fastapi.openapi.utils import get_openapi
 
     if app.openapi_schema:
         return cast(Dict[str, Any], app.openapi_schema)
 
     openapi_schema = get_openapi(
-        title=settings.title,
+        title="Сервис классификации отзывов студентов",
         version=settings.version,
-        description=settings.description,
+        description="""
+        **Сервис машинного обучения для классификации отзывов студентов**
+
+        Данный API позволяет:
+        - Классифицировать отзывы студентов по тональности и категориям
+        - Выполнять как синхронную, так и асинхронную обработку отзывов
+        - Управлять ML моделями и их версиями
+        - Отслеживать статистику использования и производительность
+
+        Для начала работы необходимо зарегистрироваться и получить JWT-токен через `/api/v1/auth/login`.
+        """,
         routes=app.routes,
     )
 
     openapi_schema["info"]["contact"] = settings.contact
 
     openapi_schema["tags"] = [
-        {"name": "Status", "description": "Эндпоинты для проверки состояния сервиса"},
-        {"name": "API", "description": "Основные эндпоинты API"},
-        {"name": "User", "description": "Эндпоинты для работы с пользователями"},
-        {"name": "Admin", "description": "Административные эндпоинты"},
+        {"name": "Статус", "description": "Эндпоинты для проверки состояния сервиса"},
+        {
+            "name": "Аутентификация",
+            "description": "Регистрация, вход и управление токенами",
+        },
+        {"name": "Классификация", "description": "Классификация отзывов (синхронная)"},
+        {
+            "name": "Асинхронные запросы",
+            "description": "API для асинхронных операций классификации",
+        },
+        {
+            "name": "Модели",
+            "description": "Информация о доступных моделях классификации",
+        },
+        {"name": "Пользователи", "description": "Управление профилем пользователя"},
+        {"name": "Биллинг", "description": "Управление балансом и транзакциями"},
+        {"name": "Задачи", "description": "Управление и мониторинг асинхронных задач"},
+        {"name": "Отчеты", "description": "Генерация и получение отчетов"},
+        {
+            "name": "Администрирование",
+            "description": "Административные функции (только для админов)",
+        },
     ]
 
     openapi_schema["servers"] = [
@@ -245,7 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(profile_router)
     app.include_router(admin_user_router)
-
+    app.include_router(classification_router)
     # Include task router
     app.include_router(task_router)
     app.include_router(async_router)

@@ -16,9 +16,3 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
 )
-
-
-@celery_app.task
-def sample_task(name: str) -> str:
-    """Sample Celery task for testing."""
-    return f"Hello {name}, task executed successfully!"
