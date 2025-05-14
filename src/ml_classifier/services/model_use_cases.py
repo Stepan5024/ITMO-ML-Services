@@ -259,393 +259,372 @@ class ModelUseCase:
 
         return models, total
 
-    from loguru import logger
+    async def activate_model(
+        self, model_id: UUID
+    ) -> Tuple[bool, str, Optional[MLModel]]:
+        """
+        Активировать ML модель.
 
-    class ModelUseCase:
-        """Использование ML моделей для активации и деактивации."""
+        Args:
+            model_id: ID модели
 
-        def __init__(self, model_repository: MLModelRepository):
-            """
-            Инициализация use case с репозиторием моделей.
-
-            Args:
-                model_repository: Репозиторий моделей
-            """
-            self.model_repository = model_repository
-
-        async def activate_model(
-            self, model_id: UUID
-        ) -> Tuple[bool, str, Optional[MLModel]]:
-            """
-            Активировать ML модель.
-
-            Args:
-                model_id: ID модели
-
-            Returns:
-                Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
-            """
-            try:
-                model = await self.model_repository.get_by_id(model_id)
-                if not model:
-                    logger.error(f"Модель с ID {model_id} не найдена.")
-                    return False, f"Модель с ID {model_id} не найдена", None
-
-                if model.is_active:
-                    logger.info(f"Модель с ID {model_id} уже активна.")
-                    return True, "Модель уже активна", model
-
-                updated = await self.model_repository.update_status(model_id, True)
-                logger.info(f"Модель с ID {model_id} успешно активирована.")
-                return True, "Модель успешно активирована", updated
-            except Exception as e:
-                logger.exception(
-                    f"Ошибка при активации модели с ID {model_id}: {str(e)}"
-                )
-                return False, f"Ошибка при активации модели: {str(e)}", None
-
-        async def deactivate_model(
-            self, model_id: UUID
-        ) -> Tuple[bool, str, Optional[MLModel]]:
-            """
-            Деактивировать ML модель.
-
-            Args:
-                model_id: ID модели
-
-            Returns:
-                Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
-            """
-            try:
-                model = await self.model_repository.get_by_id(model_id)
-                if not model:
-                    logger.error(f"Модель с ID {model_id} не найдена.")
-                    return False, f"Модель с ID {model_id} не найдена", None
-
-                if not model.is_active:
-                    logger.info(f"Модель с ID {model_id} уже деактивирована.")
-                    return True, "Модель уже деактивирована", model
-
-                updated = await self.model_repository.update_status(model_id, False)
-                logger.info(f"Модель с ID {model_id} успешно деактивирована.")
-                return True, "Модель успешно деактивирована", updated
-            except Exception as e:
-                logger.exception(
-                    f"Ошибка при деактивации модели с ID {model_id}: {str(e)}"
-                )
-                return False, f"Ошибка при деактивации модели: {str(e)}", None
-
-    class ModelVersionUseCase:
-        """Использование версии ML модели."""
-
-        def __init__(
-            self,
-            model_repository: MLModelRepository,
-            version_repository: MLModelVersionRepository,
-            model_storage_path: str = "models",
-        ):
-            """
-            Инициализация use case с репозиториями моделей и версий.
-
-            Args:
-                model_repository: Репозиторий моделей
-                version_repository: Репозиторий версий моделей
-                model_storage_path: Путь для хранения файлов моделей
-            """
-            self.model_repository = model_repository
-            self.version_repository = version_repository
-            self.model_storage_path = model_storage_path
-
-            os.makedirs(self.model_storage_path, exist_ok=True)
-
-        async def create_version(
-            self,
-            model_id: UUID,
-            version_data: Dict[str, Any],
-            model_file: UploadFile,
-            vectorizer_file: Optional[UploadFile] = None,
-            user_id: UUID = None,
-        ) -> Tuple[bool, str, Optional[MLModelVersion]]:
-            """
-            Создать новую версию модели с файлом модели и опциональным векторизатором.
-
-            Args:
-                model_id: ID модели
-                version_data: Данные версии
-                model_file: Файл модели
-                vectorizer_file: Файл векторизатора (опционально)
-                user_id: ID пользователя
-
-            Returns:
-                Tuple[bool, str, Optional[MLModelVersion]]: (успех, сообщение, созданная версия модели)
-            """
+        Returns:
+            Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
+        """
+        try:
             model = await self.model_repository.get_by_id(model_id)
             if not model:
                 logger.error(f"Модель с ID {model_id} не найдена.")
                 return False, f"Модель с ID {model_id} не найдена", None
 
-            version = version_data.get("version")
-            if not version or not self._is_valid_semver(version):
-                logger.warning(f"Неверный формат версии для модели с ID {model_id}.")
-                return (
-                    False,
-                    "Неверный формат версии. Используйте семантическое версионирование (например, 1.0.0)",
-                    None,
-                )
+            if model.is_active:
+                logger.info(f"Модель с ID {model_id} уже активна.")
+                return True, "Модель уже активна", model
 
-            existing = await self.version_repository.get_by_model_id_and_version(
-                model_id, version
+            updated = await self.model_repository.update_status(model_id, True)
+            logger.info(f"Модель с ID {model_id} успешно активирована.")
+            return True, "Модель успешно активирована", updated
+        except Exception as e:
+            logger.exception(f"Ошибка при активации модели с ID {model_id}: {str(e)}")
+            return False, f"Ошибка при активации модели: {str(e)}", None
+
+    async def deactivate_model(
+        self, model_id: UUID
+    ) -> Tuple[bool, str, Optional[MLModel]]:
+        """
+        Деактивировать ML модель.
+
+        Args:
+            model_id: ID модели
+
+        Returns:
+            Tuple[bool, str, Optional[MLModel]]: (успех, сообщение, обновленная модель)
+        """
+        try:
+            model = await self.model_repository.get_by_id(model_id)
+            if not model:
+                logger.error(f"Модель с ID {model_id} не найдена.")
+                return False, f"Модель с ID {model_id} не найдена", None
+
+            if not model.is_active:
+                logger.info(f"Модель с ID {model_id} уже деактивирована.")
+                return True, "Модель уже деактивирована", model
+
+            updated = await self.model_repository.update_status(model_id, False)
+            logger.info(f"Модель с ID {model_id} успешно деактивирована.")
+            return True, "Модель успешно деактивирована", updated
+        except Exception as e:
+            logger.exception(f"Ошибка при деактивации модели с ID {model_id}: {str(e)}")
+            return False, f"Ошибка при деактивации модели: {str(e)}", None
+
+
+class ModelVersionUseCase:
+    """Использование версии ML модели."""
+
+    def __init__(
+        self,
+        model_repository: MLModelRepository,
+        version_repository: MLModelVersionRepository,
+        model_storage_path: str = "models",
+    ):
+        """
+        Инициализация use case с репозиториями моделей и версий.
+
+        Args:
+            model_repository: Репозиторий моделей
+            version_repository: Репозиторий версий моделей
+            model_storage_path: Путь для хранения файлов моделей
+        """
+        self.model_repository = model_repository
+        self.version_repository = version_repository
+        self.model_storage_path = model_storage_path
+
+        os.makedirs(self.model_storage_path, exist_ok=True)
+
+    async def create_version(
+        self,
+        model_id: UUID,
+        version_data: Dict[str, Any],
+        model_file: UploadFile,
+        vectorizer_file: Optional[UploadFile] = None,
+        user_id: UUID = None,
+    ) -> Tuple[bool, str, Optional[MLModelVersion]]:
+        """
+        Создать новую версию модели с файлом модели и опциональным векторизатором.
+
+        Args:
+            model_id: ID модели
+            version_data: Данные версии
+            model_file: Файл модели
+            vectorizer_file: Файл векторизатора (опционально)
+            user_id: ID пользователя
+
+        Returns:
+            Tuple[bool, str, Optional[MLModelVersion]]: (успех, сообщение, созданная версия модели)
+        """
+        model = await self.model_repository.get_by_id(model_id)
+        if not model:
+            logger.error(f"Модель с ID {model_id} не найдена.")
+            return False, f"Модель с ID {model_id} не найдена", None
+
+        version = version_data.get("version")
+        if not version or not self._is_valid_semver(version):
+            logger.warning(f"Неверный формат версии для модели с ID {model_id}.")
+            return (
+                False,
+                "Неверный формат версии. Используйте семантическое версионирование (например, 1.0.0)",
+                None,
             )
-            if existing:
-                logger.warning(
-                    f"Версия {version} уже существует для модели с ID {model_id}."
-                )
-                return False, f"Версия {version} уже существует", None
 
-            model_dir = os.path.join(self.model_storage_path, str(model_id))
-            os.makedirs(model_dir, exist_ok=True)
+        existing = await self.version_repository.get_by_model_id_and_version(
+            model_id, version
+        )
+        if existing:
+            logger.warning(
+                f"Версия {version} уже существует для модели с ID {model_id}."
+            )
+            return False, f"Версия {version} уже существует", None
 
-            version_id = uuid.uuid4()
-            version_dir = os.path.join(model_dir, str(version_id))
-            os.makedirs(version_dir, exist_ok=True)
+        model_dir = os.path.join(self.model_storage_path, str(model_id))
+        os.makedirs(model_dir, exist_ok=True)
 
-            model_file_path = os.path.join(version_dir, "model.joblib")
-            vectorizer_file_path = None
+        version_id = uuid.uuid4()
+        version_dir = os.path.join(model_dir, str(version_id))
+        os.makedirs(version_dir, exist_ok=True)
+
+        model_file_path = os.path.join(version_dir, "model.joblib")
+        vectorizer_file_path = None
+
+        try:
+            model_contents = await model_file.read()
+            model_file_size = len(model_contents)
+
+            with open(model_file_path, "wb") as f:
+                f.write(model_contents)
 
             try:
-                model_contents = await model_file.read()
-                model_file_size = len(model_contents)
-
-                with open(model_file_path, "wb") as f:
-                    f.write(model_contents)
-
-                try:
-                    joblib.load(model_file_path)
-                except Exception as e:
-                    if os.path.exists(model_file_path):
-                        os.remove(model_file_path)
-                    logger.error(f"Ошибка при загрузке файла модели: {str(e)}")
-                    return False, f"Неверный файл модели: {str(e)}", None
-                if vectorizer_file:
-                    vectorizer_file_path = os.path.join(version_dir, "vectorizer.pkl")
-                    vectorizer_contents = await vectorizer_file.read()
-
-                    with open(vectorizer_file_path, "wb") as f:
-                        f.write(vectorizer_contents)
-
-                    try:
-                        joblib.load(vectorizer_file_path)
-                    except Exception as e:
-                        if os.path.exists(vectorizer_file_path):
-                            os.remove(vectorizer_file_path)
-                        if os.path.exists(model_file_path):
-                            os.remove(model_file_path)
-                        logger.error(
-                            f"Ошибка при загрузке файла векторизатора: {str(e)}"
-                        )
-                        return False, f"Неверный файл векторизатора: {str(e)}", None
-                is_default = await self._check_is_default(model_id)
-
-                version_entity = MLModelVersion(
-                    id=version_id,
-                    model_id=model_id,
-                    version=version,
-                    file_path=model_file_path,
-                    metrics=version_data.get("metrics", {}),
-                    parameters=version_data.get("parameters", {}),
-                    is_default=is_default,
-                    created_by=user_id,
-                    file_size=model_file_size,
-                    status=ModelVersionStatus(version_data.get("status", "trained")),
-                )
-
-                created = await self.version_repository.create(version_entity)
-                logger.info(
-                    f"Версия модели с ID {model_id} и версией {version} успешно создана."
-                )
-                return True, "Версия модели успешно создана", created
-
+                joblib.load(model_file_path)
             except Exception as e:
                 if os.path.exists(model_file_path):
                     os.remove(model_file_path)
-                if vectorizer_file_path and os.path.exists(vectorizer_file_path):
-                    os.remove(vectorizer_file_path)
-                logger.exception(
-                    f"Ошибка при создании версии модели с ID {model_id}: {str(e)}"
+                logger.error(f"Ошибка при загрузке файла модели: {str(e)}")
+                return False, f"Неверный файл модели: {str(e)}", None
+            if vectorizer_file:
+                vectorizer_file_path = os.path.join(version_dir, "vectorizer.pkl")
+                vectorizer_contents = await vectorizer_file.read()
+
+                with open(vectorizer_file_path, "wb") as f:
+                    f.write(vectorizer_contents)
+
+                try:
+                    joblib.load(vectorizer_file_path)
+                except Exception as e:
+                    if os.path.exists(vectorizer_file_path):
+                        os.remove(vectorizer_file_path)
+                    if os.path.exists(model_file_path):
+                        os.remove(model_file_path)
+                    logger.error(f"Ошибка при загрузке файла векторизатора: {str(e)}")
+                    return False, f"Неверный файл векторизатора: {str(e)}", None
+            is_default = await self._check_is_default(model_id)
+
+            version_entity = MLModelVersion(
+                id=version_id,
+                model_id=model_id,
+                version=version,
+                file_path=model_file_path,
+                metrics=version_data.get("metrics", {}),
+                parameters=version_data.get("parameters", {}),
+                is_default=is_default,
+                created_by=user_id,
+                file_size=model_file_size,
+                status=ModelVersionStatus(version_data.get("status", "trained")),
+            )
+
+            created = await self.version_repository.create(version_entity)
+            logger.info(
+                f"Версия модели с ID {model_id} и версией {version} успешно создана."
+            )
+            return True, "Версия модели успешно создана", created
+
+        except Exception as e:
+            if os.path.exists(model_file_path):
+                os.remove(model_file_path)
+            if vectorizer_file_path and os.path.exists(vectorizer_file_path):
+                os.remove(vectorizer_file_path)
+            logger.exception(
+                f"Ошибка при создании версии модели с ID {model_id}: {str(e)}"
+            )
+            return False, f"Ошибка при создании версии модели: {str(e)}", None
+
+    async def _check_is_default(self, model_id: UUID) -> bool:
+        """Проверка, должна ли эта версия быть дефолтной."""
+        versions = await self.version_repository.get_by_model_id(model_id)
+        return len(versions) == 0
+
+    async def get_version(self, version_id: UUID) -> Optional[MLModelVersion]:
+        """
+        Получить версию модели по ID.
+
+        Args:
+            version_id: ID версии
+
+        Returns:
+            Optional[MLModelVersion]: Найдена версия или None
+        """
+        return await self.version_repository.get_by_id(version_id)
+
+    async def list_versions(self, model_id: UUID) -> List[MLModelVersion]:
+        """
+        Получить все версии модели.
+
+        Args:
+            model_id: ID модели
+
+        Returns:
+            List[MLModelVersion]: Все версии модели
+        """
+        return await self.version_repository.get_by_model_id(model_id)
+
+    async def set_default_version(
+        self, version_id: UUID
+    ) -> Tuple[bool, str, Optional[MLModelVersion]]:
+        """
+        Установить версию как дефолтную для модели.
+
+        Args:
+            version_id: ID версии
+
+        Returns:
+            Tuple[bool, str, Optional[MLModelVersion]]: (успех, сообщение, обновленная версия)
+        """
+        version = await self.version_repository.get_by_id(version_id)
+        if not version:
+            return False, f"Версия с ID {version_id} не найдена", None
+
+        try:
+            await self.version_repository.unset_default_versions(version.model_id)
+
+            updated = await self.version_repository.set_default_version(version_id)
+            return True, "Дефолтная версия успешно установлена", updated
+        except Exception as e:
+            return False, f"Ошибка при установке дефолтной версии: {str(e)}", None
+
+    async def delete_version(self, version_id: UUID) -> Tuple[bool, str]:
+        """
+        Удалить версию модели.
+
+        Args:
+            version_id: ID версии
+
+        Returns:
+            Tuple[bool, str]: (успех, сообщение)
+        """
+        version = await self.version_repository.get_by_id(version_id)
+        if not version:
+            return False, f"Версия с ID {version_id} не найдена"
+
+        if version.is_default:
+            versions = await self.version_repository.get_by_model_id(version.model_id)
+            if len(versions) > 1:
+                return (
+                    False,
+                    "Невозможно удалить дефолтную версию. Сначала установите другую версию как дефолтную.",
                 )
-                return False, f"Ошибка при создании версии модели: {str(e)}", None
 
-        async def _check_is_default(self, model_id: UUID) -> bool:
-            """Проверка, должна ли эта версия быть дефолтной."""
-            versions = await self.version_repository.get_by_model_id(model_id)
-            return len(versions) == 0
+        try:
+            if os.path.exists(version.file_path):
+                os.remove(version.file_path)
 
-        async def get_version(self, version_id: UUID) -> Optional[MLModelVersion]:
-            """
-            Получить версию модели по ID.
+            success = await self.version_repository.delete(version_id)
+            if success:
+                return True, "Версия успешно удалена"
+            else:
+                return False, "Не удалось удалить версию"
+        except Exception as e:
+            return False, f"Ошибка при удалении версии: {str(e)}"
 
-            Args:
-                version_id: ID версии
+    async def get_default_version(self, model_id: UUID) -> Optional[MLModelVersion]:
+        """
+        Получить дефолтную версию модели.
 
-            Returns:
-                Optional[MLModelVersion]: Найдена версия или None
-            """
-            return await self.version_repository.get_by_id(version_id)
+        Args:
+            model_id: ID модели
 
-        async def list_versions(self, model_id: UUID) -> List[MLModelVersion]:
-            """
-            Получить все версии модели.
+        Returns:
+            Optional[MLModelVersion]: Дефолтная версия или None
+        """
+        return await self.version_repository.get_default_version(model_id)
 
-            Args:
-                model_id: ID модели
+    async def compare_versions(
+        self, version_id1: UUID, version_id2: UUID
+    ) -> Tuple[bool, str, Optional[Dict]]:
+        """
+        Сравнить метрики двух версий моделей.
 
-            Returns:
-                List[MLModelVersion]: Все версии модели
-            """
-            return await self.version_repository.get_by_model_id(model_id)
+        Args:
+            version_id1: ID первой версии
+            version_id2: ID второй версии
 
-        async def set_default_version(
-            self, version_id: UUID
-        ) -> Tuple[bool, str, Optional[MLModelVersion]]:
-            """
-            Установить версию как дефолтную для модели.
+        Returns:
+            Tuple[bool, str, Optional[Dict]]: (успех, сообщение, результат сравнения)
+        """
+        version1 = await self.version_repository.get_by_id(version_id1)
+        if not version1:
+            return False, f"Версия с ID {version_id1} не найдена", None
 
-            Args:
-                version_id: ID версии
+        version2 = await self.version_repository.get_by_id(version_id2)
+        if not version2:
+            return False, f"Версия с ID {version_id2} не найдена", None
 
-            Returns:
-                Tuple[bool, str, Optional[MLModelVersion]]: (успех, сообщение, обновленная версия)
-            """
-            version = await self.version_repository.get_by_id(version_id)
-            if not version:
-                return False, f"Версия с ID {version_id} не найдена", None
+        if version1.model_id != version2.model_id:
+            return False, "Невозможно сравнить версии из разных моделей", None
 
-            try:
-                await self.version_repository.unset_default_versions(version.model_id)
+        try:
+            metrics1 = version1.metrics
+            metrics2 = version2.metrics
 
-                updated = await self.version_repository.set_default_version(version_id)
-                return True, "Дефолтная версия успешно установлена", updated
-            except Exception as e:
-                return False, f"Ошибка при установке дефолтной версии: {str(e)}", None
+            common_metrics = set(metrics1.keys()) & set(metrics2.keys())
 
-        async def delete_version(self, version_id: UUID) -> Tuple[bool, str]:
-            """
-            Удалить версию модели.
+            result = {
+                "version1": {
+                    "id": str(version1.id),
+                    "version": version1.version,
+                    "metrics": metrics1,
+                },
+                "version2": {
+                    "id": str(version2.id),
+                    "version": version2.version,
+                    "metrics": metrics2,
+                },
+                "comparison": {},
+            }
 
-            Args:
-                version_id: ID версии
+            for metric in common_metrics:
+                if isinstance(metrics1[metric], (int, float)) and isinstance(
+                    metrics2[metric], (int, float)
+                ):
+                    diff = metrics2[metric] - metrics1[metric]
+                    result["comparison"][metric] = {
+                        "value_1": metrics1[metric],
+                        "value_2": metrics2[metric],
+                        "difference": diff,
+                    }
+            return True, "Сравнение выполнено", result
+        except Exception as e:
+            logger.exception(
+                f"Ошибка при сравнении версий {version_id1} и {version_id2}: {str(e)}"
+            )
+            return False, f"Ошибка при сравнении версий: {str(e)}", None
 
-            Returns:
-                Tuple[bool, str]: (успех, сообщение)
-            """
-            version = await self.version_repository.get_by_id(version_id)
-            if not version:
-                return False, f"Версия с ID {version_id} не найдена"
+    def _is_valid_semver(self, version: str) -> bool:
+        """
+        Проверка, соответствует ли версия семантическому версионированию.
 
-            if version.is_default:
-                versions = await self.version_repository.get_by_model_id(
-                    version.model_id
-                )
-                if len(versions) > 1:
-                    return (
-                        False,
-                        "Невозможно удалить дефолтную версию. Сначала установите другую версию как дефолтную.",
-                    )
+        Args:
+            version: строка версии
 
-            try:
-                if os.path.exists(version.file_path):
-                    os.remove(version.file_path)
-
-                success = await self.version_repository.delete(version_id)
-                if success:
-                    return True, "Версия успешно удалена"
-                else:
-                    return False, "Не удалось удалить версию"
-            except Exception as e:
-                return False, f"Ошибка при удалении версии: {str(e)}"
-
-        async def get_default_version(self, model_id: UUID) -> Optional[MLModelVersion]:
-            """
-            Получить дефолтную версию модели.
-
-            Args:
-                model_id: ID модели
-
-            Returns:
-                Optional[MLModelVersion]: Дефолтная версия или None
-            """
-            return await self.version_repository.get_default_version(model_id)
-
-        async def compare_versions(
-            self, version_id1: UUID, version_id2: UUID
-        ) -> Tuple[bool, str, Optional[Dict]]:
-            """
-            Сравнить метрики двух версий моделей.
-
-            Args:
-                version_id1: ID первой версии
-                version_id2: ID второй версии
-
-            Returns:
-                Tuple[bool, str, Optional[Dict]]: (успех, сообщение, результат сравнения)
-            """
-            version1 = await self.version_repository.get_by_id(version_id1)
-            if not version1:
-                return False, f"Версия с ID {version_id1} не найдена", None
-
-            version2 = await self.version_repository.get_by_id(version_id2)
-            if not version2:
-                return False, f"Версия с ID {version_id2} не найдена", None
-
-            if version1.model_id != version2.model_id:
-                return False, "Невозможно сравнить версии из разных моделей", None
-
-            try:
-                metrics1 = version1.metrics
-                metrics2 = version2.metrics
-
-                common_metrics = set(metrics1.keys()) & set(metrics2.keys())
-
-                result = {
-                    "version1": {
-                        "id": str(version1.id),
-                        "version": version1.version,
-                        "metrics": metrics1,
-                    },
-                    "version2": {
-                        "id": str(version2.id),
-                        "version": version2.version,
-                        "metrics": metrics2,
-                    },
-                    "comparison": {},
-                }
-
-                for metric in common_metrics:
-                    if isinstance(metrics1[metric], (int, float)) and isinstance(
-                        metrics2[metric], (int, float)
-                    ):
-                        diff = metrics2[metric] - metrics1[metric]
-                        result["comparison"][metric] = {
-                            "value_1": metrics1[metric],
-                            "value_2": metrics2[metric],
-                            "difference": diff,
-                        }
-                return True, "Сравнение выполнено", result
-            except Exception as e:
-                logger.exception(
-                    f"Ошибка при сравнении версий {version_id1} и {version_id2}: {str(e)}"
-                )
-                return False, f"Ошибка при сравнении версий: {str(e)}", None
-
-        def _is_valid_semver(self, version: str) -> bool:
-            """
-            Проверка, соответствует ли версия семантическому версионированию.
-
-            Args:
-                version: строка версии
-
-            Returns:
-                bool: True если версия корректна, иначе False
-            """
-            semver_pattern = r"^\d+\.\d+\.\d+$"
-            return bool(re.match(semver_pattern, version))
+        Returns:
+            bool: True если версия корректна, иначе False
+        """
+        semver_pattern = r"^\d+\.\d+\.\d+$"
+        return bool(re.match(semver_pattern, version))
